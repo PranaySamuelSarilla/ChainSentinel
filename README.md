@@ -150,7 +150,7 @@ All 7 test cases verify:
 - [x] **Phase 4**: Forensic Investigation Platform & UI Workflows (Case model, summary/graph APIs, forensic dashboard, alerts explorer, wallet deep-dive, case dossiers)
 - [x] **Phase 5**: Cryptographic Evidence Integrity & Merkle Tree Verification (Canonical JSON, SHA-256 digests, Merkle root audits, tamper detection APIs)
 - [x] **Phase 6**: Advanced Investigation Workflow (End-to-end flow: Alert → Wallet Deep Dive → Case Dossier → Evidence Anchoring → Merkle Audit → Investigation Chronology Timeline → Closure)
-- [ ] **Phase 7**: Flow Tracer & Path Reconstruction
+- [x] **Phase 7**: Flow Tracer & Path Reconstruction (Multi-hop path routing, temporal consistency, deterministic suspicion scoring, Cytoscape path visual highlighting, downstream discovery)
 - [ ] **Phase 8**: Evidence Export & Case Notarization
 - [ ] **Phase 9**: Full End-to-End System Integration
 - [ ] **Phase 10**: Complete Demo Verification & Polish

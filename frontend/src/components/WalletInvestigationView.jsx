@@ -9,7 +9,8 @@ import {
   RefreshCw,
   Search,
   AlertTriangle,
-  Layers
+  Layers,
+  Compass
 } from 'lucide-react';
 import { getWalletRisk, getWalletTransactions, getWalletGraph } from '../api';
 import GraphViewer from './GraphViewer';
@@ -23,7 +24,8 @@ const PRESET_WALLETS = [
 
 export default function WalletInvestigationView({
   initialWallet = '0x71C8366420A85E1A0F9b123D377De304559B0975',
-  onCreateCaseForWallet
+  onCreateCaseForWallet,
+  onTraceFlow
 }) {
   const [walletInput, setWalletInput] = useState(initialWallet);
   const [activeWallet, setActiveWallet] = useState(initialWallet);
@@ -204,6 +206,17 @@ export default function WalletInvestigationView({
                   {risk.alert_count} alert{risk.alert_count === 1 ? '' : 's'}
                 </div>
               </div>
+
+              {onTraceFlow && (
+                <button
+                  type="button"
+                  onClick={() => onTraceFlow(activeWallet)}
+                  className="py-3 px-3.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 hover:text-white rounded-xl text-xs font-mono font-medium transition-all flex items-center gap-1.5"
+                  title="Trace fund flows from this wallet"
+                >
+                  <Compass className="w-4 h-4 text-sky-400" /> Trace Flow
+                </button>
+              )}
 
               <button
                 type="button"

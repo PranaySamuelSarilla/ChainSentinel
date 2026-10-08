@@ -8,6 +8,7 @@ from .models import (
     DetectionSummary,
 )
 from .engine import DetectionEngine
+from .tracer import FlowTracer, FlowPath, FlowHop
 
 __all__ = [
     "Transaction",
@@ -17,4 +18,7 @@ __all__ = [
     "WalletRiskAssessment",
     "DetectionSummary",
     "DetectionEngine",
+    "FlowTracer",
+    "FlowPath",
+    "FlowHop",
 ]

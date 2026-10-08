@@ -11,7 +11,8 @@ import {
   Network,
   ShieldCheck,
   FilePlus2,
-  ExternalLink
+  ExternalLink,
+  Compass
 } from 'lucide-react';
 import {
   getInvestigations,
@@ -30,6 +31,7 @@ import CaseTimeline from './CaseTimeline';
 export default function InvestigationsView({
   onOpenCreateCaseModal,
   onInvestigateWallet,
+  onTraceFlow,
   initialCaseId = null
 }) {
   const [cases, setCases] = useState([]);
@@ -403,6 +405,18 @@ export default function InvestigationsView({
 
                 {/* Status Toggle & Graph Buttons */}
                 <div className="flex items-center gap-2 shrink-0">
+                  {onTraceFlow && caseSummary.case?.target_wallet && (
+                    <button
+                      type="button"
+                      onClick={() => onTraceFlow(caseSummary.case.target_wallet, caseSummary.case.related_wallets?.[0] || '')}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white rounded-xl text-xs font-mono font-medium transition-colors flex items-center gap-1.5"
+                      title="Trace fund flows from this case's target wallet"
+                    >
+                      <Compass className="w-3.5 h-3.5 text-sky-400" />
+                      Trace Flow
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleLoadCaseGraph}

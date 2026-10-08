@@ -206,3 +206,19 @@ export async function getCaseTimeline(caseId, order = 'asc') {
   return request(`/investigations/${encodeURIComponent(caseId)}/timeline?order=${order}`);
 }
 
+export async function traceFlow(source, target = null, maxDepth = 4) {
+  let url = `/flow/trace?source=${encodeURIComponent(source)}&max_depth=${maxDepth}`;
+  if (target) {
+    url += `&target=${encodeURIComponent(target)}`;
+  }
+  return request(url);
+}
+
+export async function getCaseFlow(caseId, target = null, maxDepth = 4) {
+  let url = `/investigations/${encodeURIComponent(caseId)}/flow?max_depth=${maxDepth}`;
+  if (target) {
+    url += `&target=${encodeURIComponent(target)}`;
+  }
+  return request(url);
+}
+

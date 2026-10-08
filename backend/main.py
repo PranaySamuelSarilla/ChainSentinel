@@ -42,6 +42,10 @@ Endpoints:
 
   Phase 6 (advanced investigation workflow):
     GET  /investigations/{case_id}/timeline
+
+  Phase 7 (flow tracer & path reconstruction):
+    GET  /flow/trace
+    GET  /investigations/{case_id}/flow
 """
 
 from datetime import datetime, timezone
@@ -732,5 +736,68 @@ def get_investigation_timeline(
         "total": len(sorted_events),
         "events": [e.to_dict() for e in sorted_events],
     }
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 7 Endpoints — Flow Tracer & Path Reconstruction
+# ──────────────────────────────────────────────────────────────────
+
+@app.get("/flow/trace")
+def trace_transaction_flow(
+    source: str = Query(..., description="Source origin wallet address"),
+    target: Optional[str] = Query(None, description="Optional target destination wallet address"),
+    max_depth: int = Query(4, ge=1, le=6, description="Maximum traversal depth (1-6 hops)"),
+):
+    """
+    Trace directed transaction flow and reconstruct paths between wallets.
+    Returns path metrics, hop-by-hop transactions, suspicion score,
+    and Cytoscape-formatted graph elements with highlighting flags.
+    If target is not specified, discovers all reachable downstream destinations.
+    """
+    source_clean = source.strip()
+    target_clean = target.strip() if target else None
+
+    # Validate that wallets exist in transaction dataset
+    all_wallets = set(t["from_wallet"] for t in DATASET) | set(t["to_wallet"] for t in DATASET)
+    if source_clean not in all_wallets:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Source wallet '{source_clean}' does not exist in transaction dataset",
+        )
+    if target_clean and target_clean not in all_wallets:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Target wallet '{target_clean}' does not exist in transaction dataset",
+        )
+
+    return ENGINE.trace_flow(source=source_clean, target=target_clean, max_depth=max_depth)
+
+
+@app.get("/investigations/{case_id}/flow")
+def trace_case_flow(
+    case_id: str,
+    target: Optional[str] = Query(None, description="Optional destination wallet (defaults to first related wallet if available)"),
+    max_depth: int = Query(4, ge=1, le=6, description="Maximum traversal depth (1-6 hops)"),
+):
+    """
+    Execute flow trace anchored to an investigation case's target wallet.
+    Allows investigating fund flow between the case's target wallet and related entities.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    target_wallet = target.strip() if target else None
+    if not target_wallet and case.related_wallets:
+        target_wallet = case.related_wallets[0]
+
+    all_wallets = set(t["from_wallet"] for t in DATASET) | set(t["to_wallet"] for t in DATASET)
+    if case.target_wallet not in all_wallets:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Case target wallet '{case.target_wallet}' does not exist in transaction dataset",
+        )
+
+    return ENGINE.trace_flow(source=case.target_wallet, target=target_wallet, max_depth=max_depth)
 
 

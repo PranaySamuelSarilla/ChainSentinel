@@ -12,8 +12,9 @@
 - **Phase 4E — Testing, Verification & Checkpoint**: COMPLETE
 - **Phase 5 — Cryptographic Evidence Integrity & Merkle Verification**: COMPLETE
 - **Phase 6 — Advanced Investigation Workflow**: COMPLETE
+- **Phase 7 — Flow Tracer & Path Reconstruction**: COMPLETE
 
-**Current Next Phase**: **Phase 7 — Flow Tracer & Path Reconstruction**
+**Current Next Phase**: **Phase 8 (Awaiting user authorization)**
 
 ---
 
@@ -61,8 +62,20 @@
 - **Wallet Alert Analysis**: `GET /wallets/{wallet_id}/alerts` returning all alerts mentioning a specific wallet.
 - **Wallet Transactions**: `GET /wallets/{wallet_id}/transactions` returning all inbound and outbound transactions for a wallet.
 - **Graph API**: `GET /graph/{wallet_id}?depth=2` returning Cytoscape-formatted nodes and directed edges with flagging metadata.
-- **Detection Summary API**: `GET /detection/summary` returning global alert counts, breakdown by pattern, and breakdown by severity.
-- **Automated Tests (`backend/tests/`)**: 130 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, investigation workflow, timeline chronology, and cryptographic evidence integrity with Merkle trees (100% passing).
+- **Flow Tracer & Path Reconstruction Engine (`backend/detection/tracer.py`)**:
+  - Directed simple path search with bounded traversal depth (1 to 6 hops).
+  - Transaction-aware path reconstruction with temporal consistency analysis ($W_1 \to W_2 \to \dots \to W_k$).
+  - Closed circular loop detection when source == target.
+  - Downstream outflow discovery when target is unspecified.
+  - Deterministic path suspicion scoring (0–100) combining peak wallet risk, average risk, pattern involvement, and velocity bonuses.
+  - Cytoscape-formatted graph generation with source, target, and hop-indexed path highlighting flags.
+- **Flow Tracer Frontend Interface (`frontend/src/components/FlowTracerView.jsx`)**:
+  - Dedicated cybersecurity command-center view with origin/destination wallet inputs, depth selector, swap action, and demo presets.
+  - Reconstructed path banner with hop count, total ETH volume, transit duration, and suspicion tier badges.
+  - Visual route canvas with neon path emphasizing source (emerald), destination (purple), path hops (cyan), and non-path dimming.
+  - Chronological hop-by-hop ledger detailing sender/recipient risk, amount, timestamp, tx hash, and forensic signatures.
+  - Direct integration to anchor reconstructed flow paths as cryptographic case evidence.
+- **Automated Tests (`backend/tests/`)**: 148 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, investigation workflow, timeline chronology, cryptographic evidence integrity, and flow path reconstruction (100% passing).
 
 ---
 
@@ -175,6 +188,8 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `GET` | `/evidence/{evidence_id}/verify` | `evidence_id` (string) | Cryptographic verification of evidence payload against stored SHA-256 digest |
 | `GET` | `/investigations/{case_id}/evidence/merkle` | `case_id` (string) | Calculate and return Merkle root and audit leaves for case evidence collection |
 | `POST` | `/investigations/{case_id}/evidence/merkle/verify` | Body: `expected_root` (string) | Verify case evidence collection against expected Merkle root and audit individual leaves |
+| `GET` | `/flow/trace` | `source` (required address), `target` (optional address), `max_depth` (1-6, default 4) | Reconstruct directed transaction flow path(s) between wallets or discover downstream flow network; returns path metrics, hops detail, suspicion score, and Cytoscape graph |
+| `GET` | `/investigations/{case_id}/flow` | `case_id` (string), `target` (optional address), `max_depth` (1-6, default 4) | Reconstruct fund flow anchored to an investigation case's target wallet and linked entities |
 
 ---
 
@@ -195,8 +210,8 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 
 ## Current Phase
 
-- **Current Status**: **Phase 6 Complete** (Phase 6: Advanced Investigation Workflow: 5-step lifecycle stepper, AddEvidenceModal, EvidenceIntegrityPanel with SHA-256 and Merkle collection verification, CaseTimeline chronological audit events, backend event tracking, GET /investigations/{case_id}/timeline, 130 tests passing)
-- **Next Task**: **Phase 7 — Flow Tracer & Path Reconstruction**
+- **Current Status**: **Phase 7 Complete** (Phase 7: Flow Tracer & Path Reconstruction: dedicated NetworkX multi-hop path reconstruction, temporal ordering, deterministic path suspicion scoring, closed cycle loop detection, downstream outflow discovery, Cytoscape visual path highlighting with non-path dimming, interactive FlowTracerView command cockpit, case evidence integration hook, 148 tests passing, 0 frontend lint errors, clean production build)
+- **Next Task**: **Phase 8 (Awaiting user authorization)**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.
 

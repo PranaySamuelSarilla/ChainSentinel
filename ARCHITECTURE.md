@@ -70,7 +70,8 @@ ChainSentinel/
 │   │       ├── CreateCaseModal.jsx          # Modal for launching investigation cases
 │   │       ├── DashboardView.jsx            # Cybersecurity command center with KPI metrics and pattern cards
 │   │       ├── EvidenceIntegrityPanel.jsx   # Merkle tree & SHA-256 verification dashboard
-│   │       ├── GraphViewer.jsx              # Cytoscape.js canvas component with controls & focus glow
+│   │       ├── FlowTracerView.jsx           # Flow tracing, path reconstruction & route analysis cockpit (Phase 7)
+│   │       ├── GraphViewer.jsx              # Cytoscape.js canvas component with controls, focus glow & path highlighting
 │   │       ├── InvestigationsView.jsx       # Case management workspace with 5-step lifecycle & evidence
 │   │       └── WalletInvestigationView.jsx  # Wallet deep-dive with risk gauge, graph & transaction ledger
 │   └── dist/                         # Verified production bundle build
@@ -94,8 +95,9 @@ ChainSentinel/
     │   ├── fanout.py                 # Smurfing dispersal detector
     │   ├── fanin.py                  # Liquidity aggregation detector
     │   ├── clusters.py               # Dense subgraph / community detector
+    │   ├── tracer.py                 # FlowTracer directed path reconstruction engine (Phase 7)
     │   ├── risk.py                   # Additive risk scoring engine
-    │   └── engine.py                 # DetectionEngine orchestrator and graph extractor
+    │   └── engine.py                 # DetectionEngine orchestrator, graph extractor & flow tracer
     ├── investigations/               # Investigation case & timeline workflow (Phases 4 & 6)
     │   ├── __init__.py               # Package exports
     │   ├── models.py                 # InvestigationCase, TimelineEvent & ID generators
@@ -106,10 +108,11 @@ ChainSentinel/
     │   ├── canonical.py              # Deterministic JSON canonicalization & SHA-256 hashing
     │   ├── merkle.py                 # Binary Merkle tree, odd-leaf balancing & inclusion proofs
     │   └── store.py                  # In-memory evidence store with JSON persistence
-    └── tests/                        # Automated test suite
+    └── tests/                        # Automated test suite (148 tests passing)
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
         ├── test_detection.py         # Phase 3 detection tests (56 tests)
+        ├── test_flow_tracer.py       # Phase 7 flow tracer & path reconstruction tests (18 tests)
         ├── test_investigations.py    # Phase 4/6 investigation & timeline tests (32 tests)
         └── test_crypto.py            # Phase 5 cryptographic integrity tests (35 tests)
 ```
@@ -131,8 +134,8 @@ The frontend is an investigation cockpit built with:
 ### Frontend Component Architecture
 
 1. **Root Navigation Shell (`frontend/src/App.jsx`)**:
-   - Manages top-level navigation across 4 primary tabs: **Dashboard**, **Alerts**, **Wallet Deep Dive**, and **Cases**.
-   - Maintains cross-view state transitions (e.g. clicking "Investigate" on an alert or case jumps directly to the Wallet Deep Dive or Cases tab with pre-selected identifiers).
+   - Manages top-level navigation across 5 primary tabs: **Dashboard**, **Alerts**, **Wallet Deep Dive**, **Flow Tracer**, and **Cases**.
+   - Maintains cross-view state transitions (e.g. clicking "Investigate" or "Trace Flow" on an alert or case jumps directly to the Wallet Deep Dive, Flow Tracer, or Cases tab with pre-selected identifiers).
    - Real-time backend connectivity check pill indicator (`/health`).
    - Global alert modal and case creation modal state.
 
@@ -175,6 +178,7 @@ The frontend is an investigation cockpit built with:
 8. **Interactive Graph Canvas (`frontend/src/components/GraphViewer.jsx`)**:
    - Canvas-based rendering with Cytoscape.js using circular and cose-bilkent layout strategies.
    - Focus node cyan glow, flagged suspect red nodes, counterparty slate nodes, directional arrows, and transfer amount labels.
+   - Route path highlighting: distinct styling for origin/source (emerald), destination (purple), path hops (cyan), and background element dimming.
    - Node click inspection, responsive resizing, and full zoom/pan navigation.
 
 9. **Add Evidence Modal (`frontend/src/components/AddEvidenceModal.jsx`)**:
@@ -194,6 +198,14 @@ The frontend is an investigation cockpit built with:
     - Distinct event badges: `CASE_CREATED`, `ALERT_LINKED`, `EVIDENCE_ANCHORED`, `INTEGRITY_VERIFIED`, `STATUS_CHANGED`, `NOTES_UPDATED`.
     - Human-readable relative elapsed time plus exact ISO/UTC timestamps.
     - Sort order toggle (`asc` chronological vs `desc` reverse-chronological).
+
+12. **Flow Tracer Cockpit (`frontend/src/components/FlowTracerView.jsx`)**:
+    - Dedicated routing analysis workbench for topological fund tracing between arbitrary source/target wallets.
+    - Metric strip displaying hop count, total transferred ETH, transit duration, temporal consistency, and deterministic suspicion tier.
+    - Integrated Cytoscape visual route canvas with neon path emphasizing source, destination, and intermediate path hops while dimming background elements.
+    - Chronological hop-by-hop ledger detailing sender/recipient risk, amount, timestamp, tx hash, and forensic signatures.
+    - Downstream discovery view when destination is unspecified, ranking reachable branches by suspicion and value.
+    - Direct integration hook to anchor reconstructed flow paths as cryptographic case evidence.
 
 ---
 

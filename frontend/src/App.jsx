@@ -6,7 +6,8 @@ import {
   FolderLock,
   Wallet,
   RefreshCw,
-  Plus
+  Plus,
+  Compass
 } from 'lucide-react';
 import {
   getHealth,
@@ -21,12 +22,13 @@ import DashboardView from './components/DashboardView';
 import AlertsView from './components/AlertsView';
 import WalletInvestigationView from './components/WalletInvestigationView';
 import InvestigationsView from './components/InvestigationsView';
+import FlowTracerView from './components/FlowTracerView';
 import AlertDetailModal from './components/AlertDetailModal';
 import CreateCaseModal from './components/CreateCaseModal';
 
 export default function App() {
   // Navigation State
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'alerts' | 'investigate' | 'cases'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'alerts' | 'investigate' | 'flow' | 'cases'
 
   // Backend Health
   const [backendHealth, setBackendHealth] = useState({
@@ -42,6 +44,8 @@ export default function App() {
 
   // Cross-View Focus State
   const [investigationTargetWallet, setInvestigationTargetWallet] = useState('0x71C8366420A85E1A0F9b123D377De304559B0975');
+  const [flowSourceWallet, setFlowSourceWallet] = useState('0x5a180f959C5b4E44a2bAA16bF379EfAc7d057a66');
+  const [flowTargetWallet, setFlowTargetWallet] = useState('0xDeB94101e4a6eD75d19830Af36691C2817865239');
   const [activeCaseId, setActiveCaseId] = useState(null);
   const [activePatternFilter, setActivePatternFilter] = useState('ALL');
 
@@ -98,6 +102,13 @@ export default function App() {
     }
   };
 
+  // Navigate to Flow Tracer
+  const handleTraceFlow = (source, target = '') => {
+    if (source) setFlowSourceWallet(source);
+    setFlowTargetWallet(target || '');
+    setActiveTab('flow');
+  };
+
   // Navigate to Alerts with Pattern Filter
   const handleNavigateToAlerts = (tab, params = {}) => {
     if (params.pattern) {
@@ -139,7 +150,7 @@ export default function App() {
             <h1 className="text-lg font-bold tracking-wider text-white flex items-center gap-2">
               CHAIN<span className="text-indigo-400">SENTINEL</span>
               <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-300 px-2 py-0.5 rounded border border-indigo-700/60 font-bold">
-                Platform Phase 4
+                Platform Phase 7
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">Blockchain Forensic Intelligence & Investigation Cockpit</p>
@@ -185,6 +196,18 @@ export default function App() {
             }`}
           >
             <Wallet className="w-3.5 h-3.5" /> Wallet Deep Dive
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('flow')}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
+              activeTab === 'flow'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" /> Flow Tracer
           </button>
 
           <button
@@ -298,15 +321,28 @@ export default function App() {
                     alert_id: riskProfile?.alerts?.[0]?.alert_id || ''
                   });
                 }}
+                onTraceFlow={handleTraceFlow}
               />
             )}
 
-            {/* VIEW 4: INVESTIGATION CASES & DOSSIERS (Phase 4D) */}
+            {/* VIEW 4: FLOW TRACER & PATH RECONSTRUCTION (Phase 7) */}
+            {activeTab === 'flow' && (
+              <FlowTracerView
+                initialSource={flowSourceWallet}
+                initialTarget={flowTargetWallet}
+                activeCaseId={activeCaseId}
+                onInvestigateWallet={handleInvestigateWallet}
+                onAnchorEvidence={loadInitialData}
+              />
+            )}
+
+            {/* VIEW 5: INVESTIGATION CASES & DOSSIERS (Phases 4 & 6) */}
             {activeTab === 'cases' && (
               <InvestigationsView
                 initialCaseId={activeCaseId}
                 onOpenCreateCaseModal={() => handleOpenCreateCaseModal()}
                 onInvestigateWallet={handleInvestigateWallet}
+                onTraceFlow={handleTraceFlow}
               />
             )}
           </>
@@ -322,6 +358,7 @@ export default function App() {
           setInvestigationTargetWallet(wallet);
           setActiveTab('investigate');
         }}
+        onTraceFlow={handleTraceFlow}
         onCreateCaseFromAlert={(al) => {
           handleOpenCreateCaseModal(al.wallets?.[0] || '', {
             alert_id: al.alert_id,
@@ -341,7 +378,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500 font-mono">
-        ChainSentinel &bull; Blockchain Forensic Investigation Platform &bull; Phase 4 Complete
+        ChainSentinel &bull; Blockchain Forensic Investigation Platform &bull; Phase 7 Complete
       </footer>
     </div>
   );

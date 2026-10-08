@@ -215,3 +215,22 @@ class DetectionEngine:
             "edges": edges,
             "flagged_wallets": list(flagged_wallets),
         }
+
+    # ------------------------------------------------------------------
+    # Flow Tracing & Path Reconstruction (Phase 7)
+    # ------------------------------------------------------------------
+
+    def trace_flow(
+        self,
+        source: str,
+        target: Optional[str] = None,
+        max_depth: int = 4,
+    ) -> Dict:
+        """
+        Execute flow tracing and path reconstruction from source to target
+        (or discover downstream flows if target is None).
+        """
+        if not hasattr(self, "_tracer") or self._tracer is None:
+            from .tracer import FlowTracer
+            self._tracer = FlowTracer(self._transactions, self)
+        return self._tracer.trace_flow(source, target, max_depth=max_depth)

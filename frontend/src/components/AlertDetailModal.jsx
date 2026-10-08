@@ -1,10 +1,11 @@
-import { AlertTriangle, X, Wallet, FolderPlus, Hash } from 'lucide-react';
+import { AlertTriangle, X, Wallet, FolderPlus, Hash, Compass } from 'lucide-react';
 
 export default function AlertDetailModal({
   alert,
   onClose,
   onInvestigateWallet,
   onViewGraph,
+  onTraceFlow,
   onCreateCaseFromAlert
 }) {
   if (!alert) return null;
@@ -167,6 +168,20 @@ export default function AlertDetailModal({
           </div>
 
           <div className="flex items-center gap-2">
+            {onTraceFlow && alert.wallets?.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const src = alert.wallets[0];
+                  const tgt = alert.wallets.length > 1 ? alert.wallets[alert.wallets.length - 1] : '';
+                  onTraceFlow(src, tgt);
+                  onClose();
+                }}
+                className="px-3.5 py-1.5 text-xs font-medium text-sky-300 hover:text-white bg-sky-950/70 hover:bg-sky-900 border border-sky-700/60 rounded-xl transition-colors flex items-center gap-1.5 font-mono"
+              >
+                <Compass className="w-3.5 h-3.5 text-sky-400" /> Trace Flow
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
