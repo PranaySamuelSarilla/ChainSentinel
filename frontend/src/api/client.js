@@ -259,4 +259,33 @@ export async function getInvestigationIntelligence(caseId) {
   return request(`/analytics/investigations/${encodeURIComponent(caseId)}`);
 }
 
+// ──────────────────────────────────────────────────────────────────
+// Transaction Providers & Real-Time Ingestion (Phase 10)
+// ──────────────────────────────────────────────────────────────────
+
+export async function getProviderStatus() {
+  return request('/api/provider/status');
+}
+
+export async function setProviderMode(mode) {
+  return request('/api/provider/mode', {
+    method: 'POST',
+    body: JSON.stringify({ mode }),
+  });
+}
+
+export async function ingestLiveTransactions(transactions) {
+  return request('/api/provider/ingest', {
+    method: 'POST',
+    body: JSON.stringify({ transactions }),
+  });
+}
+
+export async function fetchLiveBlock(max_txs = 25) {
+  return request('/api/provider/fetch-live', {
+    method: 'POST',
+    body: JSON.stringify({ max_txs }),
+  });
+}
+
 

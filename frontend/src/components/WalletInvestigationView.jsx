@@ -287,7 +287,7 @@ export default function WalletInvestigationView({
               <Radar className="w-4 h-4 text-indigo-400" /> Behavioral Forensics &amp; Flow Dynamics
             </h3>
             <span className="text-[10px] font-mono text-slate-500">
-              Deterministic Profiling &bull; Phase 8 Intelligence
+              Deterministic Profiling &bull; Behavioral Intelligence
             </span>
           </div>
 

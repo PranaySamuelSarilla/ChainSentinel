@@ -96,13 +96,13 @@ export default function DashboardView({
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-mono mb-2">
               <Activity className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Real-Time Forensic Engine Active &bull; Phase 8 Intelligence Layer</span>
+              <span>Real-Time Forensic Engine Active &bull; Behavioral Intelligence Layer</span>
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
               Forensic Intelligence Command Center
             </h2>
             <p className="text-slate-400 text-xs max-w-2xl mt-1 leading-relaxed">
-              Deterministic graph topology detection and explainable behavioral profiling monitoring synthetic ledger flows. Identifies smurfing splits, circular mule loops, rapid passthrough chains, and multi-pattern convergence.
+              Deterministic graph topology detection and explainable behavioral profiling monitoring blockchain ledger flows. Identifies smurfing splits, circular mule loops, rapid passthrough chains, and multi-pattern convergence.
             </p>
           </div>
 

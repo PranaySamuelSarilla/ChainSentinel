@@ -29,14 +29,21 @@ ChainSentinel/
 │   │   ├── loader.py             # CSV/ledger loader & statistics
 │   │   ├── transactions.csv      # 70 simulated transactions (normal & suspicious)
 │   │   └── __init__.py
+│   ├── providers/                # Pluggable transaction providers (Phase 10)
+│   │   ├── base.py               # Provider abstract contract
+│   │   ├── synthetic.py          # Benchmark dataset provider (default demo)
+│   │   ├── live.py               # Live Ethereum RPC ingestion & normalization
+│   │   ├── manager.py            # Provider manager & state hot-swapper
+│   │   └── __init__.py
 │   ├── detection/                # Rule-based pattern detection (Phase 3)
 │   │   └── __init__.py
 │   ├── crypto/                   # SHA-256 & Merkle Tree verification (Phase 5)
 │   │   └── __init__.py
 │   ├── analytics/                # Behavioral profiling & intelligence (Phase 8)
 │   │   └── __init__.py
-│   ├── tests/                    # Automated pytest suite (169 tests)
+│   ├── tests/                    # Automated pytest suite (183 tests)
 │   │   ├── test_basic.py         # Tests for dataset and API endpoints
+│   │   └── test_providers.py     # Tests for providers and live ingestion
 │   ├── main.py                   # FastAPI application & REST endpoints
 │   ├── requirements.txt          # Python dependencies
 │   └── venv/                     # Python virtual environment
@@ -134,8 +141,8 @@ Run the backend test suite:
 .\backend\venv\Scripts\python.exe -m pytest backend/tests -v
 ```
 
-All 169 automated tests verify:
-- Health check and platform statistics endpoints
+All 183 automated tests verify:
+- Health check, platform statistics, and transaction provider endpoints
 - Synthetic dataset topological integrity
 - Six modular graph detection algorithms (Circular, Rapid, Burst, Split, Recomb, Cluster)
 - Deterministic risk scoring and severity aggregation
@@ -143,6 +150,16 @@ All 169 automated tests verify:
 - Cryptographic evidence canonicalization, SHA-256 digests, and Merkle tree audits
 - Multi-hop directed flow tracer and path reconstruction
 - Behavioral wallet profiling, 9 explainable classifications, and cross-pattern alert correlation
+- Pluggable provider abstraction, live transaction normalization, and public RPC polling
+
+---
+
+## ⚡ Pluggable Transaction Providers & Live Ingestion (Phase 10)
+
+ChainSentinel supports two data ingestion modes, switchable on-the-fly via the navbar toggle or REST API:
+
+1. **`DEMO` Mode (Default)**: Loads the deterministic 70-transaction benchmark dataset (`backend/data/transactions.csv`). Guarantees 100% offline uptime, reproducible alerts, and zero network dependency.
+2. **`LIVE` Mode**: Enables dynamic Ethereum transaction ingestion and block polling. Connects to Ethereum public RPC (default: `https://cloudflare-eth.com`, or custom endpoint via `CHAINSENTINEL_RPC_URL` environment variable). Ingested blocks are normalized, and the detection and intelligence engines dynamically re-warm and re-index in memory.
 
 ---
 
@@ -157,4 +174,4 @@ All 169 automated tests verify:
 - [x] **Phase 7**: Flow Tracer & Path Reconstruction (Multi-hop path routing, temporal consistency, deterministic suspicion scoring, Cytoscape path visual highlighting, downstream discovery)
 - [x] **Phase 8**: Advanced Analytics & Intelligence (Behavioral profiling, 9 explainable classifications, multi-pattern alert correlation, executive strategic dossiers, 5 REST endpoints, frontend intelligence visualizations)
 - [x] **Phase 9**: Final Integration, Interactive UI Polish & Hackathon Demo Readiness (Dark cinematic cyber command center aesthetics, forensic workflow pipeline stepper, smooth Cytoscape animations & halo glows, glassmorphism cards, cross-view seamless navigation)
-- [ ] **Phase 10**: Complete Demo Verification & Polish
+- [x] **Phase 10**: Production Hardening & Real-Time Ingestion Readiness (Pluggable provider layer, Ethereum JSON-RPC polling, dynamic transaction ingestion, navbar mode switcher, 183 tests passing)

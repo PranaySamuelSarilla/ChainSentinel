@@ -24,6 +24,8 @@ ChainSentinel is structured as a decoupled full-stack platform consisting of a h
 │               Detection Engine Orchestrator            │
 │  - Typed Domain Modeling (models.py)                   │
 │  - 6 Modular Rule Detectors (NetworkX graph analysis)  │
+│  - Flow Tracer & Path Reconstruction (tracer.py)       │
+│  - Behavioral Intelligence & Profiler (analytics/)     │
 └──────────────────────────┬─────────────────────────────┘
                            │
                            ▼
@@ -34,9 +36,18 @@ ChainSentinel is structured as a decoupled full-stack platform consisting of a h
                            │
                            ▼
 ┌────────────────────────────────────────────────────────┐
+│        Pluggable Transaction Provider Layer            │
+│  - ProviderManager (Hot-Swappable DEMO / LIVE Mode)   │
+│  - SyntheticTransactionProvider (70 Benchmark Txs)     │
+│  - LiveBlockchainProvider (Public Ethereum RPC Ingest) │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
 │                      Data Layer                        │
 │  - CSV Transaction Ledger (backend/data/transactions)  │
 │  - Pure-Python Ingestion & Validation (loader.py)      │
+│  - Live Ethereum JSON-RPC Feeds (Cloudflare / Custom)  │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -59,8 +70,8 @@ ChainSentinel/
 │   │   ├── main.jsx                  # React application entry point
 │   │   ├── App.jsx                   # Dark cybersecurity cockpit, tabs, and live data integration
 │   │   ├── index.css                 # Tailwind v4 import and custom dark styling
-│   │   ├── api/                      # Frontend API client layer (Phase 4B)
-│   │   │   ├── client.js             # Universal fetch wrapper with direct/proxy fallback
+│   │   ├── api/                      # Frontend API client layer (Phase 4B & Phase 10)
+│   │   │   ├── client.js             # Universal fetch wrapper with direct/proxy fallback & provider methods
 │   │   │   └── index.js              # Re-exports for components
 │   │   └── components/
 │   │       ├── AddEvidenceModal.jsx         # Modal for anchoring evidence with JSON validation
@@ -80,6 +91,12 @@ ChainSentinel/
     ├── venv/                         # Python 3.12 isolated virtual environment
     ├── main.py                       # FastAPI application, CORS, and REST endpoints
     ├── __init__.py
+    ├── providers/                    # Pluggable transaction provider layer (Phase 10)
+    │   ├── __init__.py               # Package exports
+    │   ├── base.py                   # BaseTransactionProvider abstract interface
+    │   ├── synthetic.py              # Synthetic benchmark provider (70 transactions)
+    │   ├── live.py                   # Live Ethereum RPC ingestion & normalization provider
+    │   └── manager.py                # ProviderManager hot-swap controller & listener hub
     ├── data/                         # Ledger data layer
     │   ├── __init__.py
     │   ├── transactions.csv          # 70 simulated transactions (source of truth)
@@ -114,14 +131,15 @@ ChainSentinel/
     │   ├── profiler.py               # Deterministic feature extraction & behavioral classification
     │   ├── correlator.py             # Multi-pattern alert correlation & convergence detector
     │   └── intelligence.py           # Unified IntelligenceEngine facade & case dossier compiler
-    └── tests/                        # Automated test suite (169 tests passing)
+    └── tests/                        # Automated test suite (183 tests passing)
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
         ├── test_detection.py         # Phase 3 detection tests (56 tests)
         ├── test_flow_tracer.py       # Phase 7 flow tracer & path reconstruction tests (18 tests)
         ├── test_investigations.py    # Phase 4/6 investigation & timeline tests (32 tests)
         ├── test_crypto.py            # Phase 5 cryptographic integrity tests (35 tests)
-        └── test_analytics.py         # Phase 8 analytics & intelligence tests (21 tests)
+        ├── test_analytics.py         # Phase 8 analytics & intelligence tests (21 tests)
+        └── test_providers.py         # Phase 10 provider & live ingestion tests (14 tests)
 ```
 
 ---
@@ -470,3 +488,38 @@ Phase 8 elevates ChainSentinel from raw pattern detection to explainable, strate
    Deterministic canonical JSON serialization, SHA-256 standard digests, and RFC 6962-compliant binary Merkle trees anchor case evidence into tamper-evident proofs.
 8. **Explainable Behavioral Intelligence over Black-Box Scoring (Phase 8)**:
    Behavioral profiling uses explicit, inspectable criteria (flow balance, counterparty breadth, velocity, loop topology) allowing forensic investigators to defend their conclusions under regulatory and legal examination.
+9. **Pluggable Transaction Provider Architecture with Deterministic Fallback (Phase 10)**:
+   Separating transaction ingestion behind `BaseTransactionProvider` and `ProviderManager` allows seamless transition between synthetic benchmark scenarios and live blockchain RPC nodes. By defaulting to `SyntheticTransactionProvider`, the application guarantees 100% demo uptime and deterministic test repeatability without network flakiness.
+
+---
+
+## Phase 10 — Pluggable Transaction Provider & Real-Time Ingestion Architecture
+
+### 1. Architectural Motivation
+Prior to Phase 10, the system read statically from `backend/data/transactions.csv`. In Phase 10, the data access layer was refactored into a modular provider interface to allow:
+- Zero-downtime hot-swapping between pre-baked benchmark scenarios (`DEMO`) and live on-chain feeds (`LIVE`).
+- Direct JSON batch ingestion from external telemetry systems or microservices.
+- Polling of live Ethereum blocks via standard Ethereum JSON-RPC without introducing heavy web3 dependencies.
+
+### 2. Provider Abstraction Contract (`backend/providers/base.py`)
+All transaction providers adhere to `BaseTransactionProvider`:
+- `get_transactions() -> List[Transaction]`: Returns the current dataset of typed transactions.
+- `get_transaction(tx_id: str) -> Optional[Transaction]`: O(1) single transaction lookup.
+- `ingest(raw_txs: List[Dict[str, Any]]) -> int`: Ingests and normalizes external transaction payloads into active memory.
+- `fetch_live(max_txs: int) -> Dict[str, Any]`: Queries the active blockchain RPC endpoint for block transfers.
+- `count() -> int`: Returns current record count.
+
+### 3. Concrete Providers
+- **`SyntheticTransactionProvider` (`backend/providers/synthetic.py`)**: Loads the 70 benchmark forensic transactions (1,200.45 ETH) from `backend/data/transactions.csv`. Provides an immutable baseline for deterministic demonstration of all 6 suspicious topologies.
+- **`LiveBlockchainProvider` (`backend/providers/live.py`)**:
+  - Connects to Ethereum public RPC (defaulting to Cloudflare public node `https://cloudflare-eth.com`, configurable via `CHAINSENTINEL_RPC_URL`).
+  - Implements lightweight, non-blocking JSON-RPC `eth_getBlockByNumber("latest", true)` requests using standard Python `urllib.request`.
+  - Normalizes hex values (e.g., `value`, `gasPrice`) into standard decimal ETH floats and unix timestamps.
+  - Dynamically appends transactions to an in-memory ledger with deduplication.
+
+### 4. Provider Manager & Engine Synchronization (`backend/providers/manager.py`)
+`ProviderManager` acts as the single entry point for the backend application:
+- Coordinates active mode (`DEMO` vs `LIVE`).
+- Manages an observer subscription pattern (`register_listener(callback)`).
+- When a mode change or dynamic ingestion occurs, the registered callback rebuilds the `DetectionEngine` and `IntelligenceEngine` cache in memory, ensuring immediate synchronization across all downstream endpoints (`/alerts`, `/wallets/*`, `/graph/*`, `/flow/*`, `/analytics/*`).
+

@@ -15,12 +15,31 @@
 - **Phase 7 — Flow Tracer & Path Reconstruction**: COMPLETE
 - **Phase 8 — Advanced Analytics & Intelligence**: COMPLETE
 - **Phase 9 — Final Integration, Interactive UI Polish & Hackathon Demo Readiness**: COMPLETE
+- **Phase 10 — Production Hardening & Real-Time Transaction Readiness**: COMPLETE
 
-**Current Status**: **Phase 9 Complete — Hackathon Demo Ready**
+**Current Status**: **Phase 10 Complete — Production Hardened & Real-Time Ingestion Ready**
 
 ---
 
 ## Completed Features
+
+- **Pluggable Transaction Provider Architecture & Real-Time Ingestion (Phase 10)**:
+  - `BaseTransactionProvider` (`backend/providers/base.py`): Abstract base contract defining dataset querying, transaction ingestion, and live block fetching.
+  - `SyntheticTransactionProvider` (`backend/providers/synthetic.py`): Default, zero-dependency benchmark provider loading the 70 curated forensic transactions (1,200.45 ETH) for 100% reliable deterministic offline demos and automated test runs.
+  - `LiveBlockchainProvider` (`backend/providers/live.py`): Ingestion provider supporting Ethereum JSON-RPC block querying (Cloudflare unauthenticated public RPC fallback, configurable via `CHAINSENTINEL_RPC_URL`), batch JSON ingestion, and robust data normalization into typed transaction records.
+  - `ProviderManager` (`backend/providers/manager.py`): Central controller orchestrating mode switching (`DEMO` vs `LIVE`) and listener registration. When the provider mode or dataset changes, listener callbacks automatically re-warm and synchronize `DetectionEngine` and `IntelligenceEngine` in memory without server restarts.
+  - New REST API Endpoints:
+    - `GET /api/provider/status`: Retrieve active mode (`DEMO` / `LIVE`), provider name, and loaded transaction count.
+    - `POST /api/provider/mode`: Hot-swap active mode between `DEMO` and `LIVE`.
+    - `POST /api/provider/ingest`: Dynamically ingest arbitrary live or simulated transaction batches.
+    - `POST /api/provider/fetch-live`: Query latest block transactions from public Ethereum RPC into active memory.
+    - `GET /health`: Enhanced to return `data_mode` and `provider_name`.
+  - Frontend UI Data Source Switcher (`frontend/src/App.jsx`):
+    - Navbar segmented toggle: DEMO (indigo) vs LIVE (emerald with animated beacon).
+    - Dynamic "Poll Block" action button triggering on-demand RPC block ingestion in LIVE mode.
+    - Active transaction count pill and temporary feedback toast notifications.
+  - Finished Product Branding Cleanup: Removed development-phase branding ("Phase 9", "Hackathon Demo Ready") in favor of production styling ("ChainSentinel", "Blockchain Forensic Intelligence", "Investigation Command Center").
+  - Test Suite: **183 / 183 automated tests passing** (14 new unit and integration tests in `backend/tests/test_providers.py`). Frontend lint: 0 errors; frontend build: clean.
 
 - **React + Vite Frontend (`frontend/`)**: React 19, Vite 8, Tailwind CSS v4, Lucide React icons, Cytoscape.js installed. Development server with backend API proxy (`/api` → `http://127.0.0.1:8000`) and direct fallback. Full frontend API client layer (`frontend/src/api/`) communicating with all backend endpoints. Complete forensic investigation platform across 4 coordinated views:
   - **Dashboard View (`DashboardView.jsx`)**: Cybersecurity command center with live KPI metric strip (21 alerts, 11 high/critical, 9 medium, 1 low), interactive pattern breakdown matrix (6 cards with click-to-filter), top threats feed, and quick forensic jumps.
@@ -209,6 +228,10 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `GET` | `/analytics/summary` | None | Network-wide intelligence summary: classification breakdown, priority distribution, top correlations, and top targets |
 | `GET` | `/analytics/correlations` | `severity` (optional), `wallet` (optional) | Cross-pattern correlation convergence events where distinct suspicious topologies intersect |
 | `GET` | `/analytics/investigations/{case_id}` | `case_id` (string) | Executive strategic intelligence dossier for investigation case with priority score, target behavior, counterparty threat matrix, and Merkle status |
+| `GET` | `/api/provider/status` | None | Returns active data mode (`DEMO` / `LIVE`), provider description, and total transactions loaded |
+| `POST` | `/api/provider/mode` | Body: `mode` (`DEMO` or `LIVE`) | Hot-swaps data provider mode, resets engine state, and broadcasts reload listeners |
+| `POST` | `/api/provider/ingest` | Body: `transactions` (list of raw or normalized tx dicts) | Dynamically ingest batch transactions into active provider and re-evaluates detections |
+| `POST` | `/api/provider/fetch-live` | Body: optional `max_txs` (default 25) | Poll latest block transactions from Ethereum RPC into live memory and recalculates graph |
 
 ---
 
@@ -229,8 +252,8 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 
 ## Current Phase
 
-- **Current Status**: **Phase 9 Complete** (Phase 9: Final Integration, Interactive UI Polish & Hackathon Demo Readiness: cinematic command center design, interactive forensic pipeline stepper, Cytoscape smooth animations & halo glow effects, direct cross-view flow tracing, glassmorphism cards, 169 backend tests passing, 0 frontend lint errors, clean production build)
-- **Next Task**: **Phase 10 (Awaiting user authorization)**
+- **Current Status**: **Phase 10 Complete** (Phase 10: Final Hardening + Real-Time Transaction Readiness: pluggable provider layer with Synthetic benchmark and Live Ethereum JSON-RPC ingestion, hot-swapping provider manager, UI DEMO/LIVE switcher, production branding cleanup, 183 backend tests passing, 0 frontend lint errors, clean production build)
+- **Next Task**: **Project Complete / Production Deployment Ready**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.
 

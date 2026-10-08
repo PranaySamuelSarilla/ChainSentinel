@@ -7,7 +7,10 @@ import {
   Wallet,
   RefreshCw,
   Plus,
-  Compass
+  Compass,
+  Database,
+  Radio,
+  DownloadCloud
 } from 'lucide-react';
 import {
   getHealth,
@@ -15,7 +18,10 @@ import {
   getDetectionSummary,
   getAlerts,
   getInvestigations,
-  createInvestigation
+  createInvestigation,
+  getProviderStatus,
+  setProviderMode,
+  fetchLiveBlock
 } from './api';
 
 import DashboardView from './components/DashboardView';
@@ -58,6 +64,13 @@ export default function App() {
     relatedWallets: []
   });
 
+  // Transaction Provider State (Demo vs Live)
+  const [dataMode, setDataMode] = useState('DEMO'); // 'DEMO' | 'LIVE'
+  const [providerInfo, setProviderInfo] = useState(null);
+  const [switchingMode, setSwitchingMode] = useState(false);
+  const [pollingBlock, setPollingBlock] = useState(false);
+  const [modeNotification, setModeNotification] = useState(null);
+
   // Loading & Error States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -70,17 +83,22 @@ export default function App() {
       const health = await getHealth();
       setBackendHealth({ status: 'connected', message: health.message || 'Engine Operational' });
 
-      const [sumRes, infoRes, alertsRes, casesRes] = await Promise.all([
+      const [sumRes, infoRes, alertsRes, casesRes, provRes] = await Promise.all([
         getDetectionSummary(),
         getDatasetInfo().catch(() => null),
         getAlerts({ limit: 100 }),
         getInvestigations().catch(() => ({ investigations: [] })),
+        getProviderStatus().catch(() => null),
       ]);
 
       setSummary(sumRes);
       setDatasetInfo(infoRes);
       setAlerts(alertsRes.alerts || []);
       setInvestigationsCount(casesRes.investigations?.length || 0);
+      if (provRes) {
+        setDataMode(provRes.mode || 'DEMO');
+        setProviderInfo(provRes);
+      }
     } catch (err) {
       console.error('API initialization error:', err);
       setBackendHealth({ status: 'disconnected', message: 'Backend Offline' });
@@ -93,6 +111,44 @@ export default function App() {
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
+
+  // Mode Switching Handler
+  const handleToggleMode = async (targetMode) => {
+    if (switchingMode || targetMode === dataMode) return;
+    setSwitchingMode(true);
+    try {
+      const res = await setProviderMode(targetMode);
+      setDataMode(res.mode);
+      setProviderInfo(res);
+      setModeNotification(`Switched to ${res.mode} mode (${res.transaction_count} transactions active)`);
+      setTimeout(() => setModeNotification(null), 4000);
+      await loadInitialData();
+    } catch (err) {
+      console.error('Failed to change mode:', err);
+      setModeNotification('Failed to switch data source mode');
+      setTimeout(() => setModeNotification(null), 4000);
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
+
+  // Live Block Polling Handler
+  const handlePollLiveBlock = async () => {
+    if (pollingBlock) return;
+    setPollingBlock(true);
+    try {
+      const res = await fetchLiveBlock(15);
+      setModeNotification(`Polled block ${res.block_number || 'latest'}: ${res.ingested_count} txs ingested (${res.total_transactions} total)`);
+      setTimeout(() => setModeNotification(null), 5000);
+      await loadInitialData();
+    } catch (err) {
+      console.error('Failed to poll live block:', err);
+      setModeNotification('Live block poll failed: check RPC connectivity');
+      setTimeout(() => setModeNotification(null), 4000);
+    } finally {
+      setPollingBlock(false);
+    }
+  };
 
   // Navigate to Wallet Deep Dive
   const handleInvestigateWallet = (walletAddress) => {
@@ -150,10 +206,10 @@ export default function App() {
             <h1 className="text-lg font-bold tracking-wider text-white flex items-center gap-2">
               CHAIN<span className="text-indigo-400">SENTINEL</span>
               <span className="text-[10px] font-mono uppercase bg-indigo-950/90 text-indigo-300 px-2.5 py-0.5 rounded-full border border-indigo-500/50 font-bold tracking-wide">
-                Phase 9 • Hackathon Ready
+                Investigation Command Center
               </span>
             </h1>
-            <p className="text-[11px] text-slate-400">Autonomous Forensic Intelligence &amp; Cryptographic Audit Cockpit</p>
+            <p className="text-[11px] text-slate-400">Blockchain Forensic Intelligence &amp; Cryptographic Audit Cockpit</p>
           </div>
         </div>
 
@@ -225,6 +281,58 @@ export default function App() {
 
         {/* Right Status & Refresh */}
         <div className="flex items-center gap-3">
+          {/* Data Mode Switcher (Demo vs Live) */}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl border border-slate-800 bg-slate-950/90 font-mono text-xs shadow-inner">
+            <div className="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-lg border border-slate-800">
+              <button
+                type="button"
+                onClick={() => handleToggleMode('DEMO')}
+                disabled={switchingMode}
+                title="Synthetic Benchmark Dataset (70 curated transactions)"
+                className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider transition-all flex items-center gap-1 ${
+                  dataMode === 'DEMO'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Database className="w-3 h-3" />
+                DEMO
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleToggleMode('LIVE')}
+                disabled={switchingMode}
+                title="Live Blockchain Ingestion & Public RPC Feed"
+                className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider transition-all flex items-center gap-1 ${
+                  dataMode === 'LIVE'
+                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Radio className={`w-3 h-3 ${dataMode === 'LIVE' ? 'animate-pulse' : ''}`} />
+                LIVE
+              </button>
+            </div>
+
+            {dataMode === 'LIVE' && (
+              <button
+                type="button"
+                onClick={handlePollLiveBlock}
+                disabled={pollingBlock}
+                title="Poll Latest Ethereum Block (Cloudflare RPC)"
+                className="px-2 py-1 bg-slate-850 hover:bg-slate-750 text-cyan-300 rounded-md text-[10px] flex items-center gap-1 transition-colors border border-cyan-800/40 disabled:opacity-50"
+              >
+                <DownloadCloud className={`w-3 h-3 ${pollingBlock ? 'animate-bounce' : ''}`} />
+                <span className="hidden sm:inline">Poll Block</span>
+              </button>
+            )}
+
+            <span className="text-[10px] text-slate-500 px-1 hidden sm:inline" title="Loaded transaction count">
+              {providerInfo?.transaction_count ?? (datasetInfo?.total_transactions ?? '—')} txs
+            </span>
+          </div>
+
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-800 bg-slate-950 text-xs font-mono">
             <span
               className={`w-2 h-2 rounded-full ${
@@ -257,6 +365,23 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Mode Switch Notification Banner */}
+      {modeNotification && (
+        <div className="bg-indigo-950/80 border-b border-indigo-700/60 px-6 py-2 flex items-center justify-between text-xs text-indigo-200 font-mono">
+          <div className="flex items-center gap-2">
+            <Radio className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+            <span>{modeNotification}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setModeNotification(null)}
+            className="text-slate-400 hover:text-white text-[11px]"
+          >
+            &times; Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Error Notification Bar */}
       {error && (
@@ -425,7 +550,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500 font-mono">
-        ChainSentinel &bull; Autonomous Blockchain Forensic Platform &bull; Phase 9 Verified &bull; Hackathon Demo Ready
+        ChainSentinel &bull; Blockchain Forensic Intelligence &bull; Investigation Command Center
       </footer>
     </div>
   );

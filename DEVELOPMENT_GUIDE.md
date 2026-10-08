@@ -87,13 +87,15 @@ npm run dev
 
 ---
 
-## Current Next Step
+## Current Status & Next Steps
 
-**Phase 4 is next:**
-- Implementation of investigation case data models and storage (SQLite/JSON persistence).
-- Refinement of investigation-specific endpoints:
-  - `POST /investigations` (create case)
-  - `GET /investigations/{id}` (retrieve case)
-  - Investigation flow trace endpoints.
+**Phase 10 is COMPLETE:**
+- Backend: 183/183 tests passing.
+- Frontend: 0 lint errors, clean production build.
+- Pluggable transaction providers active: `SyntheticTransactionProvider` (default demo benchmark) and `LiveBlockchainProvider` (Ethereum JSON-RPC).
+- UI data source switcher integrated in navbar with instant block polling capability.
+- Full product branding cleanup applied ("ChainSentinel", "Blockchain Forensic Intelligence", "Investigation Command Center").
 
-> **CRITICAL REMINDER**: Do NOT implement Phase 4 during this documentation task. Await explicit user authorization.
+**Next Step:**
+- Project is complete, hardened, and ready for production deployment or live hackathon presentation.
+

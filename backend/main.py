@@ -77,6 +77,7 @@ try:
     from backend.crypto.merkle import MerkleTree, compute_merkle_root
     from backend.crypto.store import EVIDENCE_STORE
     from backend.analytics.intelligence import IntelligenceEngine
+    from backend.providers.manager import PROVIDER_MANAGER
 except (ImportError, ModuleNotFoundError):
     from data.loader import load_transactions, get_dataset_stats
     from detection.engine import DetectionEngine
@@ -93,6 +94,7 @@ except (ImportError, ModuleNotFoundError):
     from crypto.merkle import MerkleTree, compute_merkle_root
     from crypto.store import EVIDENCE_STORE
     from analytics.intelligence import IntelligenceEngine
+    from providers.manager import PROVIDER_MANAGER
 
 app = FastAPI(
     title="ChainSentinel API",
@@ -110,9 +112,9 @@ app.add_middleware(
 )
 
 # ──────────────────────────────────────────────────────────────────
-# Application startup — load data and run detection engine once
+# Application startup — initialize from active transaction provider
 # ──────────────────────────────────────────────────────────────────
-DATASET = load_transactions()
+DATASET = PROVIDER_MANAGER.get_transactions()
 STATS = get_dataset_stats(DATASET)
 ENGINE = DetectionEngine(DATASET)
 
@@ -124,6 +126,20 @@ _ALERTS_BY_ID = {a.alert_id: a for a in _ALL_ALERTS}
 INTEL_ENGINE = IntelligenceEngine(ENGINE._transactions, ENGINE)
 
 
+def _on_provider_dataset_updated():
+    """Callback invoked when transactions update or data mode switches."""
+    global DATASET, STATS, ENGINE, _ALL_ALERTS, _ALERTS_BY_ID, INTEL_ENGINE
+    DATASET = PROVIDER_MANAGER.get_transactions()
+    STATS = get_dataset_stats(DATASET)
+    ENGINE = DetectionEngine(DATASET)
+    _ALL_ALERTS = ENGINE.detect_all()
+    _ALERTS_BY_ID = {a.alert_id: a for a in _ALL_ALERTS}
+    INTEL_ENGINE = IntelligenceEngine(ENGINE._transactions, ENGINE)
+
+
+PROVIDER_MANAGER.register_listener(_on_provider_dataset_updated)
+
+
 # ──────────────────────────────────────────────────────────────────
 # Response Models
 # ──────────────────────────────────────────────────────────────────
@@ -132,6 +148,8 @@ class HealthResponse(BaseModel):
     status: str
     message: str
     version: str
+    data_mode: Optional[str] = "DEMO"
+    provider_name: Optional[str] = "Synthetic Forensic Ledger (Demo)"
 
 
 class CreateInvestigationRequest(BaseModel):
@@ -172,6 +190,8 @@ def health_check():
         "status": "ok",
         "message": "ChainSentinel Backend Engine Operational",
         "version": "0.2.0",
+        "data_mode": PROVIDER_MANAGER.mode,
+        "provider_name": PROVIDER_MANAGER.get_active_provider().name,
     }
 
 
@@ -909,6 +929,62 @@ def get_investigation_intelligence(case_id: str):
             detail=f"Intelligence dossier could not be compiled for case '{case_id}' (target wallet may not exist in ledger)",
         )
     return intel.to_dict()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 10: Pluggable Transaction Providers & Real-Time Ingestion
+# ──────────────────────────────────────────────────────────────────
+
+class SwitchModeRequest(BaseModel):
+    mode: str
+
+
+class IngestTransactionsRequest(BaseModel):
+    transactions: List[Dict[str, Any]]
+
+
+class FetchLiveBlockRequest(BaseModel):
+    max_txs: Optional[int] = 25
+
+
+@app.get("/api/provider/status")
+def get_provider_status():
+    """Returns the operational status of the active transaction provider and data mode."""
+    return PROVIDER_MANAGER.get_status()
+
+
+@app.post("/api/provider/mode")
+def set_provider_mode(req: SwitchModeRequest):
+    """
+    Switches the active transaction data mode between 'DEMO' (synthetic ledger)
+    and 'LIVE' (real-time blockchain ingestion / public RPC).
+    """
+    try:
+        return PROVIDER_MANAGER.switch_mode(req.mode)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+
+@app.post("/api/provider/ingest")
+def ingest_live_transactions(req: IngestTransactionsRequest):
+    """
+    Ingests live external blockchain transactions, normalizes them into ChainSentinel
+    schema, and updates detection models and risk scores in real-time.
+    """
+    if not req.transactions:
+        raise HTTPException(status_code=400, detail="Transactions array cannot be empty")
+    return PROVIDER_MANAGER.ingest_live_transactions(req.transactions)
+
+
+@app.post("/api/provider/fetch-live")
+def fetch_live_blockchain_block(req: Optional[FetchLiveBlockRequest] = None):
+    """
+    Polls the configured public Ethereum JSON-RPC endpoint for latest block transactions,
+    normalizes them, and ingests them into the live feed.
+    """
+    max_txs = req.max_txs if req and req.max_txs else 25
+    return PROVIDER_MANAGER.fetch_live_block(max_txs=max_txs)
+
 
 
 
