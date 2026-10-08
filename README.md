@@ -148,9 +148,9 @@ All 7 test cases verify:
 - [x] **Phase 2**: Synthetic Transaction Dataset (7 topologies, CSV loader, summary analytics)
 - [x] **Phase 3**: Rule-Based Detection Engine (Circular, Rapid, Burst, Split, Recomb, Cluster algorithms)
 - [x] **Phase 4**: Forensic Investigation Platform & UI Workflows (Case model, summary/graph APIs, forensic dashboard, alerts explorer, wallet deep-dive, case dossiers)
-- [ ] **Phase 5**: React Cybersecurity Dashboard & Activity Charts
-- [ ] **Phase 6**: Cytoscape.js Interactive Wallet Graph Visualization
-- [ ] **Phase 7**: Investigation Workflow & Flow Tracer
-- [ ] **Phase 8**: SHA-256 Case Hashing & Merkle Tree Evidence Verification
+- [x] **Phase 5**: Cryptographic Evidence Integrity & Merkle Tree Verification (Canonical JSON, SHA-256 digests, Merkle root audits, tamper detection APIs)
+- [ ] **Phase 6**: Advanced Cybersecurity Visualizations & Activity Charts
+- [ ] **Phase 7**: Flow Tracer & Path Reconstruction
+- [ ] **Phase 8**: Evidence Export & Case Notarization
 - [ ] **Phase 9**: Full End-to-End System Integration
 - [ ] **Phase 10**: Complete Demo Verification & Polish

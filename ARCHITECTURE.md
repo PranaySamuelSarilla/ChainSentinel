@@ -97,13 +97,18 @@ ChainSentinel/
     │   ├── __init__.py               # Package exports
     │   ├── models.py                 # InvestigationCase domain model & case ID generator
     │   └── store.py                  # In-memory case repository with JSON persistence
-    ├── crypto/                       # Phase 8 cryptographic evidence verification
-    │   └── __init__.py
+    ├── crypto/                       # Cryptographic evidence & Merkle verification (Phase 5)
+    │   ├── __init__.py               # Package exports
+    │   ├── models.py                 # EvidenceRecord dataclass & ID generator
+    │   ├── canonical.py              # Deterministic JSON canonicalization & SHA-256 hashing
+    │   ├── merkle.py                 # Binary Merkle tree, odd-leaf balancing & inclusion proofs
+    │   └── store.py                  # In-memory evidence store with JSON persistence
     └── tests/                        # Automated test suite
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
         ├── test_detection.py         # Phase 3 detection tests (56 tests)
-        └── test_investigations.py    # Phase 4 investigation tests (27 tests)
+        ├── test_investigations.py    # Phase 4 investigation tests (27 tests)
+        └── test_crypto.py            # Phase 5 cryptographic integrity tests (35 tests)
 ```
 
 ---
@@ -180,6 +185,7 @@ The backend is built with **FastAPI** (`backend/main.py`), running under **Uvico
   - Wallet analytics (`/wallets/{wallet_id}/risk`, `/wallets/{wallet_id}/alerts`, `/wallets/{wallet_id}/transactions`)
   - Topological exploration (`/graph/{wallet_id}`)
   - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`, `/investigations/{case_id}/summary`, `/investigations/{case_id}/graph`)
+  - Cryptographic evidence & Merkle verification (`/investigations/{case_id}/evidence`, `/evidence/{evidence_id}`, `/evidence/{evidence_id}/verify`, `/investigations/{case_id}/evidence/merkle`, `/investigations/{case_id}/evidence/merkle/verify`)
 
 ---
 
@@ -244,6 +250,54 @@ The investigation workflow provides analyst case management on top of the detect
    - Assembles a unified forensic dossier: case metadata, resolved alert objects, target wallet risk assessment, target wallet transaction history, and risk assessments for all tagged related wallets in a single query.
 4. **Investigation Graph (`GET /investigations/{case_id}/graph`)**:
    - Reuses the Phase 3 NetworkX-based graph traversal engine (`ENGINE.get_wallet_graph`) centered on the case's target wallet, returning Cytoscape.js compatible nodes, edges, flagged wallet highlights, and configurable hop depth (1–3 hops).
+
+---
+
+## Cryptographic Evidence & Integrity Layer (Phase 5)
+
+ChainSentinel includes a tamper-evident cryptographic audit layer built on SHA-256 and binary Merkle trees:
+
+```text
+Investigation Case
+        │
+        ▼
+Evidence Payload (Transaction, Alert, Wallet Risk, Analyst Finding)
+        │
+        ▼ (canonical.py)
+Sorted-Key Canonical JSON  (whitespace-normalized, ASCII-safe)
+        │
+        ▼ (hashlib.sha256)
+SHA-256 Evidence Hash (bound to EvidenceRecord)
+        │
+        ▼ (store.py)
+Tamper-Evident Evidence Store (in-memory + evidence.json)
+        │
+        ▼ (merkle.py)
+Deterministic Binary Merkle Tree (trailing-duplicate odd leaf balancing)
+        │
+        ▼
+Case Merkle Root & Inclusion Audit Proofs
+```
+
+### Components
+
+1. **`models.py` (`backend/crypto/models.py`)**:
+   - `EvidenceRecord`: Domain dataclass holding `evidence_id`, `case_id`, `evidence_type` (`TRANSACTION`, `ALERT`, `WALLET_RISK`, `ANALYST_NOTE`, `GRAPH_SNAPSHOT`, `CUSTOM`), `source_ref`, `content`, `created_at`, `evidence_hash`, and `metadata`.
+   - `generate_evidence_id()`: Creates collision-resistant IDs (`EVID-<8 hex chars>`) using case ID, evidence type, timestamp, and entropy.
+2. **`canonical.py` (`backend/crypto/canonical.py`)**:
+   - `canonicalize(data)`: Produces a deterministic, whitespace-normalized, sorted-key JSON string via standard `json.dumps(data, sort_keys=True, separators=(',', ':'), ensure_ascii=True)`. Guarantees identical byte representations regardless of dictionary key insertion order.
+   - `hash_data(data)`: Standard SHA-256 digest via Python's `hashlib` (pure standard library, eliminating unsafe non-deterministic Python `hash()`).
+   - `compute_evidence_hash()` / `verify_evidence_hash()`: Computes and verifies cryptographic hashes for evidence payloads.
+3. **`merkle.py` (`backend/crypto/merkle.py`)**:
+   - `MerkleTree`: Binary Merkle tree implementation.
+   - **Deterministic Sorting**: Leaf hashes are sorted lexicographically by default, guaranteeing consistent root generation regardless of evidence submission order.
+   - **Empty Collections**: Returns canonical digest `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (SHA-256 of empty bytes `b""`).
+   - **Single Leaf**: Returns the leaf hash itself as the root.
+   - **Odd-Leaf Balancing**: When any tree layer contains an odd number of nodes (> 1), the final un-paired node is duplicated (paired with itself: `hash_pair(node, node)`), adhering to the Bitcoin/RFC 6962 binary Merkle standard.
+   - **Inclusion Proofs**: Generates cryptographic audit paths (`get_proof`) and verifies them (`verify_proof`).
+4. **`store.py` (`backend/crypto/store.py`)**:
+   - `EvidenceStore`: Thread-safe dictionary repository with JSON file persistence (`evidence.json`).
+   - Singleton instance `EVIDENCE_STORE` shared across API route handlers.
 
 
 ## Risk Model

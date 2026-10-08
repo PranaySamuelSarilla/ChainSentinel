@@ -10,8 +10,9 @@
 - **Phase 4C — Dashboard & Alert Experience Refinement**: COMPLETE
 - **Phase 4D — Wallet Investigation & Case Workflow UI**: COMPLETE
 - **Phase 4E — Testing, Verification & Checkpoint**: COMPLETE
+- **Phase 5 — Cryptographic Evidence Integrity & Merkle Verification**: COMPLETE
 
-**Current Next Phase**: **Phase 5 — Advanced Cybersecurity Visualizations & Activity Charts**
+**Current Next Phase**: **Phase 6 — Advanced Cybersecurity Visualizations & Activity Charts**
 
 ---
 
@@ -27,6 +28,21 @@
   - `InvestigationCase` domain model (`case_id`, `title`, `target_wallet`, `status`, `notes`, `alert_ids`, `related_wallets`, timestamps)
   - `InvestigationCaseStore` singleton (`CASE_STORE`) providing in-memory lookup and JSON file persistence (`cases.json`)
   - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`), comprehensive aggregated case summary (`GET /investigations/{case_id}/summary`), and investigation graph visualization (`GET /investigations/{case_id}/graph`)
+- **Cryptographic Evidence & Integrity Layer (`backend/crypto/`)**:
+  - `EvidenceRecord` domain model (`evidence_id`, `case_id`, `evidence_type`, `source_ref`, `content`, `created_at`, `evidence_hash`, `metadata`) and `generate_evidence_id` generator (`EVID-<8 hex chars>`).
+  - `canonicalize()` deterministic JSON canonicalization function sorting keys at all recursive levels with compact whitespace (`ensure_ascii=True`, `separators=(',', ':')`).
+  - `hash_data()` SHA-256 standard hashing via Python `hashlib` (pure standard library, no external crypto packages or non-deterministic Python `hash()`).
+  - `compute_evidence_hash()` and `verify_evidence_hash()` for tamper detection and audit verification.
+  - `EvidenceStore` singleton (`EVIDENCE_STORE`) with in-memory dict lookup and JSON persistence (`evidence.json`).
+  - `MerkleTree` binary tree implementation supporting empty collections (canonical `e3b0c442...`), single leaves, multi-leaf trees, lexicographical leaf sorting for determinism, trailing-duplicate balancing for odd levels (RFC 6962 / Bitcoin standard), and cryptographic inclusion proofs (`get_proof`, `verify_proof`).
+  - Full REST APIs:
+    - `POST /investigations/{case_id}/evidence` (create and cryptographically anchor evidence)
+    - `GET /investigations/{case_id}/evidence` (list case evidence records)
+    - `GET /evidence/{evidence_id}` (retrieve single evidence record)
+    - `GET /evidence/{evidence_id}/verify` (verify single evidence cryptographic integrity)
+    - `GET /investigations/{case_id}/evidence/merkle` (generate case Merkle root)
+    - `POST /investigations/{case_id}/evidence/merkle/verify` (verify case evidence collection against expected root)
+    - Integrated `evidence_count` into `GET /investigations/{case_id}/summary`
 - **Synthetic Transaction Dataset (`backend/data/transactions.csv`)**: 70 transactions across 70 wallets totaling 1,200.45 ETH, containing deliberate examples of 6 suspicious topologies and 4 normal activity patterns.
 - **Transaction Loader (`backend/data/loader.py`)**: High-performance dataset loader using Python standard library `csv` and typed records, returning summary metrics without external binary dependencies.
 - **Transaction APIs**: `GET /transactions` (with pagination and filtering by category or wallet) and `GET /transactions/{tx_id}`.
@@ -44,7 +60,7 @@
 - **Wallet Transactions**: `GET /wallets/{wallet_id}/transactions` returning all inbound and outbound transactions for a wallet.
 - **Graph API**: `GET /graph/{wallet_id}?depth=2` returning Cytoscape-formatted nodes and directed edges with flagging metadata.
 - **Detection Summary API**: `GET /detection/summary` returning global alert counts, breakdown by pattern, and breakdown by severity.
-- **Automated Tests (`backend/tests/`)**: 90 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, and the complete investigation workflow with summary aggregation and case graphs (100% passing).
+- **Automated Tests (`backend/tests/`)**: 125 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, investigation workflow, and cryptographic evidence integrity with Merkle trees (100% passing).
 
 ---
 
@@ -148,8 +164,14 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `GET` | `/investigations/{case_id}` | `case_id` (string) | Retrieve investigation case by ID; returns 404 if not found |
 | `PATCH` | `/investigations/{case_id}/status` | Body: `status` (`OPEN` or `CLOSED`) | Update investigation case status; returns updated case object |
 | `PATCH` | `/investigations/{case_id}/notes` | Body: `notes` (string) | Update investigation case notes; returns updated case object |
-| `GET` | `/investigations/{case_id}/summary` | `case_id` (string) | Comprehensive forensic investigation summary (case, target risk, resolved alerts, transactions, related risks) |
+| `GET` | `/investigations/{case_id}/summary` | `case_id` (string) | Comprehensive forensic investigation summary (case, target risk, resolved alerts, transactions, related risks, evidence_count) |
 | `GET` | `/investigations/{case_id}/graph` | `case_id` (string), `depth` (1-3, default 2) | Cytoscape graph data centered on case target wallet (reusing Phase 3 graph engine) |
+| `POST` | `/investigations/{case_id}/evidence` | Body: `evidence_type`, `source_ref`, `content`, optional `metadata` | Cryptographically anchor evidence record (201 Created); computes canonical SHA-256 hash |
+| `GET` | `/investigations/{case_id}/evidence` | `case_id` (string) | List all evidence records bound to a case; returns array and total |
+| `GET` | `/evidence/{evidence_id}` | `evidence_id` (string) | Retrieve single evidence record by ID; returns 404 if not found |
+| `GET` | `/evidence/{evidence_id}/verify` | `evidence_id` (string) | Cryptographic verification of evidence payload against stored SHA-256 digest |
+| `GET` | `/investigations/{case_id}/evidence/merkle` | `case_id` (string) | Calculate and return Merkle root and audit leaves for case evidence collection |
+| `POST` | `/investigations/{case_id}/evidence/merkle/verify` | Body: `expected_root` (string) | Verify case evidence collection against expected Merkle root and audit individual leaves |
 
 ---
 
@@ -161,14 +183,17 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
    The Uniswap DEX Router address (`0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640`) receives transactions from multiple independent traders within 1 hour. This triggers a `FAN_IN_RECOMBINATION` alert at `LOW` severity. In the MVP this is documented behavior. In future iterations, a verified public contract whitelist can be introduced.
 3. **Cluster Generates Sub-Cycles in Circular Detection**:
    The 5-node mixing ring (`0xEE01...` through `0xEE05...`) features 12 interconnected transfers, resulting in multiple sub-cycles detected by `CIRCULAR_TRANSACTION` alongside the primary `SUSPICIOUS_CLUSTER` alert. This is mathematically accurate for cyclic subgraphs and must not be suppressed without a dedicated cycle subsumption rule.
+4. **Merkle Tree Odd-Leaf Handling Specification**:
+   When any binary tree level contains an odd number of nodes (> 1), the final un-paired node is duplicated (paired with itself: `hash_pair(node, node)`) to balance the tree layer. This adheres to the Bitcoin/RFC 6962 binary Merkle standard and guarantees deterministic, replayable root calculation.
 
-> **CRITICAL RULE**: These limitations are known characteristics of the current deterministic rule-based algorithms. They must NOT be silently altered, bypassed, or removed.
+> **CRITICAL RULE**: These limitations are known characteristics of the current deterministic rule-based algorithms and cryptographic standards. They must NOT be silently altered, bypassed, or removed.
 
 ---
 
 ## Current Phase
 
-- **Current Status**: **Phase 4 Complete** (Phase 4A: Models & Store, Phase 4B: Summary/Graph APIs & Frontend Integration, Phase 4C: Dashboard & Alerts, Phase 4D: Wallet Deep Dive & Case Management, Phase 4E: Testing, Verification & Checkpoint)
-- **Next Task**: **Phase 5 — Advanced Cybersecurity Visualizations & Activity Charts**
+- **Current Status**: **Phase 5 Complete** (Phase 5: EvidenceRecord model, Canonicalization, SHA-256 Hashing, EvidenceStore, MerkleTree with odd-leaf duplicate balancing and proofs, 6 REST APIs, 35 unit/integration tests)
+- **Next Task**: **Phase 6 — Advanced Cybersecurity Visualizations & Activity Charts**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.
+

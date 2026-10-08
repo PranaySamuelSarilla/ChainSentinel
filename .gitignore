@@ -9,6 +9,7 @@ __pycache__/
 *.sqlite3
 *.db
 cases.json
+evidence.json
 .pytest_cache/
 
 # Node

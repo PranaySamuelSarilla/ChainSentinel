@@ -31,10 +31,18 @@ Endpoints:
 
   Phase 4B-2 (investigation graph):
     GET  /investigations/{case_id}/graph
+
+  Phase 5 (evidence integrity & merkle verification):
+    POST /investigations/{case_id}/evidence
+    GET  /investigations/{case_id}/evidence
+    GET  /evidence/{evidence_id}
+    GET  /evidence/{evidence_id}/verify
+    GET  /investigations/{case_id}/evidence/merkle
+    POST /investigations/{case_id}/evidence/merkle/verify
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -44,11 +52,19 @@ try:
     from backend.detection.engine import DetectionEngine
     from backend.investigations.models import InvestigationCase, CaseStatus, generate_case_id
     from backend.investigations.store import CASE_STORE
+    from backend.crypto.models import EvidenceRecord, EvidenceType, generate_evidence_id
+    from backend.crypto.canonical import compute_evidence_hash, verify_evidence_hash
+    from backend.crypto.merkle import MerkleTree, compute_merkle_root
+    from backend.crypto.store import EVIDENCE_STORE
 except (ImportError, ModuleNotFoundError):
     from data.loader import load_transactions, get_dataset_stats
     from detection.engine import DetectionEngine
     from investigations.models import InvestigationCase, CaseStatus, generate_case_id
     from investigations.store import CASE_STORE
+    from crypto.models import EvidenceRecord, EvidenceType, generate_evidence_id
+    from crypto.canonical import compute_evidence_hash, verify_evidence_hash
+    from crypto.merkle import MerkleTree, compute_merkle_root
+    from crypto.store import EVIDENCE_STORE
 
 app = FastAPI(
     title="ChainSentinel API",
@@ -101,6 +117,17 @@ class UpdateCaseStatusRequest(BaseModel):
 
 class UpdateCaseNotesRequest(BaseModel):
     notes: str
+
+
+class CreateEvidenceRequest(BaseModel):
+    evidence_type: str
+    source_ref: str
+    content: Dict[str, Any]
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class VerifyMerkleRootRequest(BaseModel):
+    expected_root: str
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -404,6 +431,7 @@ def get_investigation_summary(case_id: str):
         "resolved_alerts": resolved_alerts,
         "wallet_transactions": wallet_txs,
         "related_wallet_risks": related_risks,
+        "evidence_count": EVIDENCE_STORE.count_by_case(case_id),
     }
 
 
@@ -425,5 +453,163 @@ def get_investigation_graph(
         "case_id": case.case_id,
         "target_wallet": case.target_wallet,
         **graph_data,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 5 Endpoints — Cryptographic Evidence & Integrity Verification
+# ──────────────────────────────────────────────────────────────────
+
+@app.post("/investigations/{case_id}/evidence", status_code=201)
+def create_case_evidence(case_id: str, payload: CreateEvidenceRequest):
+    """
+    Create and cryptographically anchor an evidence record for an investigation case.
+    Validates case existence, canonicalizes payload, calculates SHA-256 digest,
+    and stores in the tamper-evident repository.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    ev_type = payload.evidence_type.strip().upper() if payload.evidence_type else ""
+    if not ev_type:
+        raise HTTPException(status_code=400, detail="evidence_type is required")
+
+    source_ref = payload.source_ref.strip() if payload.source_ref else ""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    evidence_id = generate_evidence_id(case_id, ev_type, now_iso)
+    meta = payload.metadata or {}
+
+    evidence_hash = compute_evidence_hash(
+        case_id=case_id,
+        evidence_type=ev_type,
+        source_ref=source_ref,
+        content=payload.content,
+        metadata=meta,
+    )
+
+    record = EvidenceRecord(
+        evidence_id=evidence_id,
+        case_id=case_id,
+        evidence_type=ev_type,
+        source_ref=source_ref,
+        content=payload.content,
+        created_at=now_iso,
+        evidence_hash=evidence_hash,
+        metadata=meta,
+    )
+
+    try:
+        saved = EVIDENCE_STORE.create(record)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    return saved.to_dict()
+
+
+@app.get("/investigations/{case_id}/evidence")
+def list_case_evidence(case_id: str):
+    """List all cryptographic evidence records bound to an investigation case."""
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    records = EVIDENCE_STORE.list_by_case(case_id)
+    return {
+        "case_id": case_id,
+        "total": len(records),
+        "evidence": [r.to_dict() for r in records],
+    }
+
+
+@app.get("/evidence/{evidence_id}")
+def get_evidence(evidence_id: str):
+    """Retrieve an evidence record by its unique evidence ID."""
+    record = EVIDENCE_STORE.get(evidence_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Evidence record '{evidence_id}' not found")
+    return record.to_dict()
+
+
+@app.get("/evidence/{evidence_id}/verify")
+def verify_evidence(evidence_id: str):
+    """
+    Verify the cryptographic integrity of an evidence record.
+    Re-canonicalizes stored content and checks against the recorded SHA-256 digest.
+    """
+    record = EVIDENCE_STORE.get(evidence_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Evidence record '{evidence_id}' not found")
+
+    result = EVIDENCE_STORE.verify(evidence_id)
+    result["algorithm"] = "SHA-256"
+    result["verified_at"] = datetime.now(timezone.utc).isoformat()
+    return result
+
+
+@app.get("/investigations/{case_id}/evidence/merkle")
+def get_case_merkle_root(case_id: str):
+    """
+    Generate and retrieve the Merkle root and audit parameters for an
+    investigation's complete evidence collection.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    records = EVIDENCE_STORE.list_by_case(case_id)
+    leaf_hashes = [r.evidence_hash for r in records]
+    tree = MerkleTree(leaf_hashes)
+
+    return {
+        "case_id": case_id,
+        "total_leaves": len(leaf_hashes),
+        "leaf_hashes": tree.leaves,
+        "merkle_root": tree.root,
+        "odd_leaf_handling": "trailing_duplicate",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.post("/investigations/{case_id}/evidence/merkle/verify")
+def verify_case_merkle_root(case_id: str, payload: VerifyMerkleRootRequest):
+    """
+    Verify an investigation's current evidence collection against an expected Merkle root.
+    Also audits all individual leaves for tamper detection.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    records = EVIDENCE_STORE.list_by_case(case_id)
+    leaf_hashes = [r.evidence_hash for r in records]
+    tree = MerkleTree(leaf_hashes)
+
+    # Audit each individual leaf
+    intact_count = 0
+    tampered_count = 0
+    for r in records:
+        v = EVIDENCE_STORE.verify(r.evidence_id)
+        if v and v.get("valid"):
+            intact_count += 1
+        else:
+            tampered_count += 1
+
+    expected_norm = payload.expected_root.strip().lower()
+    computed_norm = tree.root.lower()
+    root_match = (expected_norm == computed_norm)
+    valid = root_match and (tampered_count == 0)
+
+    return {
+        "case_id": case_id,
+        "expected_root": payload.expected_root,
+        "computed_root": tree.root,
+        "root_match": root_match,
+        "valid": valid,
+        "tampered": not valid,
+        "total_leaves": len(records),
+        "intact_leaves_count": intact_count,
+        "tampered_leaves_count": tampered_count,
+        "verified_at": datetime.now(timezone.utc).isoformat(),
     }
 
