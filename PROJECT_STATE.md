@@ -6,8 +6,9 @@
 - **Phase 2 — Synthetic Transaction Dataset & Basic APIs**: COMPLETE
 - **Phase 3 — Rule-Based Detection Engine**: COMPLETE
 - **Phase 4A — Investigation Case Model, Storage & Core APIs**: COMPLETE
+- **Phase 4B-1 — Investigation Case Summary Aggregation API**: COMPLETE
 
-**Current Next Sub-Phase**: **Phase 4B — Investigation flow tracing and remaining Phase 4 capabilities**
+**Current Next Sub-Phase**: **Phase 4B-2 — Investigation flow tracing, graph integration, and remaining Phase 4 capabilities**
 
 ---
 
@@ -18,7 +19,7 @@
 - **Investigation Workflow Backend (`backend/investigations/`)**:
   - `InvestigationCase` domain model (`case_id`, `title`, `target_wallet`, `status`, `notes`, `alert_ids`, `related_wallets`, timestamps)
   - `InvestigationCaseStore` singleton (`CASE_STORE`) providing in-memory lookup and JSON file persistence (`cases.json`)
-  - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`)
+  - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`), and comprehensive aggregated case summary (`GET /investigations/{case_id}/summary`)
 - **Synthetic Transaction Dataset (`backend/data/transactions.csv`)**: 70 transactions across 70 wallets totaling 1,200.45 ETH, containing deliberate examples of 6 suspicious topologies and 4 normal activity patterns.
 - **Transaction Loader (`backend/data/loader.py`)**: High-performance dataset loader using Python standard library `csv` and typed records, returning summary metrics without external binary dependencies.
 - **Transaction APIs**: `GET /transactions` (with pagination and filtering by category or wallet) and `GET /transactions/{tx_id}`.
@@ -36,7 +37,7 @@
 - **Wallet Transactions**: `GET /wallets/{wallet_id}/transactions` returning all inbound and outbound transactions for a wallet.
 - **Graph API**: `GET /graph/{wallet_id}?depth=2` returning Cytoscape-formatted nodes and directed edges with flagging metadata.
 - **Detection Summary API**: `GET /detection/summary` returning global alert counts, breakdown by pattern, and breakdown by severity.
-- **Automated Tests (`backend/tests/`)**: 80 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, and the complete investigation workflow (100% passing).
+- **Automated Tests (`backend/tests/`)**: 85 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, and the complete investigation workflow with summary aggregation (100% passing).
 
 ---
 
@@ -140,6 +141,7 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `GET` | `/investigations/{case_id}` | `case_id` (string) | Retrieve investigation case by ID; returns 404 if not found |
 | `PATCH` | `/investigations/{case_id}/status` | Body: `status` (`OPEN` or `CLOSED`) | Update investigation case status; returns updated case object |
 | `PATCH` | `/investigations/{case_id}/notes` | Body: `notes` (string) | Update investigation case notes; returns updated case object |
+| `GET` | `/investigations/{case_id}/summary` | `case_id` (string) | Comprehensive forensic investigation summary (case, target risk, resolved alerts, transactions, related risks) |
 
 ---
 
@@ -158,7 +160,7 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 
 ## Current Phase
 
-- **Current Status**: **Phase 4A Complete** (Investigation Case Model, Storage Layer & Core REST APIs)
-- **Next Task**: **Phase 4B — Investigation Flow Tracing and Remaining Backend Preparation**
+- **Current Status**: **Phase 4B-1 Complete** (Investigation Case Summary Aggregation API)
+- **Next Task**: **Phase 4B-2 — Investigation Flow Tracing, Graph Integration & Remaining Phase 4 Capabilities**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.

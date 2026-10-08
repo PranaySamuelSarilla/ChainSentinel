@@ -1,17 +1,17 @@
 """
-ChainSentinel - Phase 4A Investigation Workflow Tests
+ChainSentinel - Phase 4A & 4B-1 Investigation Workflow Tests
 
 Tests case creation, retrieval, listing, status updates, note edits,
-persistence, validation errors, and 404 responses.
+persistence, validation errors, 404 responses, and aggregated case summaries.
 
 Run with:
-    .\backend\venv\Scripts\python.exe -m pytest backend/tests/test_investigations.py -v
+    pytest backend/tests/test_investigations.py -v
 """
 
 import pytest
 from starlette.testclient import TestClient
 
-from backend.main import app
+from backend.main import app, _ALL_ALERTS, DATASET
 from backend.investigations.models import CaseStatus, generate_case_id
 from backend.investigations.store import CASE_STORE, InvestigationCaseStore
 
@@ -275,3 +275,122 @@ def test_investigation_json_persistence(client):
     assert loaded_case is not None
     assert loaded_case.title == "Persistence Test Case"
     assert loaded_case.notes == "Testing disk reload"
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 4B-1: Summary Endpoint Tests
+# ──────────────────────────────────────────────────────────────────
+
+def test_investigation_summary_success(client):
+    """GET /investigations/{case_id}/summary returns full aggregated forensic summary."""
+    target_wallet = DATASET[0]["from_wallet"]
+    sample_alert = _ALL_ALERTS[0]
+    related_wallet = DATASET[1]["to_wallet"]
+
+    create_res = client.post("/investigations", json={
+        "title": "Summary Aggregation Test",
+        "target_wallet": target_wallet,
+        "notes": "Analyst examining target wallet flow.",
+        "alert_ids": [sample_alert.alert_id],
+        "related_wallets": [related_wallet],
+    })
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    res = client.get(f"/investigations/{case_id}/summary")
+    assert res.status_code == 200
+    data = res.json()
+
+    # 1. Case object
+    assert "case" in data
+    assert data["case"]["case_id"] == case_id
+    assert data["case"]["target_wallet"] == target_wallet
+
+    # 2. Target wallet risk
+    assert "target_wallet_risk" in data
+    assert data["target_wallet_risk"]["wallet_id"] == target_wallet
+    assert "risk_score" in data["target_wallet_risk"]
+    assert "risk_level" in data["target_wallet_risk"]
+    assert "pattern_types" in data["target_wallet_risk"]
+
+    # 3. Resolved alerts
+    assert "resolved_alerts" in data
+    assert len(data["resolved_alerts"]) == 1
+    assert data["resolved_alerts"][0]["alert_id"] == sample_alert.alert_id
+    assert "explanation" in data["resolved_alerts"][0]
+
+    # 4. Target wallet transactions
+    assert "wallet_transactions" in data
+    assert isinstance(data["wallet_transactions"], list)
+    assert len(data["wallet_transactions"]) >= 1
+    for tx in data["wallet_transactions"]:
+        assert tx["from_wallet"] == target_wallet or tx["to_wallet"] == target_wallet
+
+    # 5. Related wallet risks
+    assert "related_wallet_risks" in data
+    assert related_wallet in data["related_wallet_risks"]
+    assert data["related_wallet_risks"][related_wallet]["wallet_id"] == related_wallet
+    assert "risk_score" in data["related_wallet_risks"][related_wallet]
+    assert "risk_level" in data["related_wallet_risks"][related_wallet]
+
+
+def test_investigation_summary_not_found(client):
+    """GET /investigations/{case_id}/summary returns 404 for nonexistent case."""
+    res = client.get("/investigations/CASE-nonexistent/summary")
+    assert res.status_code == 404
+    assert "not found" in res.json()["detail"].lower()
+
+
+def test_investigation_summary_empty_links(client):
+    """GET /investigations/{case_id}/summary succeeds when case has no alerts or related wallets."""
+    create_res = client.post("/investigations", json={
+        "title": "Minimal Case Summary",
+        "target_wallet": DATASET[0]["from_wallet"],
+    })
+    case_id = create_res.json()["case_id"]
+
+    res = client.get(f"/investigations/{case_id}/summary")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["resolved_alerts"] == []
+    assert data["related_wallet_risks"] == {}
+    assert len(data["wallet_transactions"]) >= 1
+
+
+def test_investigation_summary_unknown_alert_id_handled(client):
+    """GET /investigations/{case_id}/summary gracefully handles unknown alert IDs."""
+    create_res = client.post("/investigations", json={
+        "title": "Unknown Alert ID Case",
+        "target_wallet": "0xTargetUnknown",
+        "alert_ids": ["NON_EXISTENT_ALERT_12345"],
+    })
+    case_id = create_res.json()["case_id"]
+
+    res = client.get(f"/investigations/{case_id}/summary")
+    assert res.status_code == 200
+    data = res.json()
+    # Unknown alert ID is safely filtered out
+    assert data["resolved_alerts"] == []
+    # Target with no transactions has empty list and clean LOW risk
+    assert data["wallet_transactions"] == []
+    assert data["target_wallet_risk"]["risk_score"] == 0
+    assert data["target_wallet_risk"]["risk_level"] == "LOW"
+
+
+def test_investigation_summary_multiple_related_wallets(client):
+    """GET /investigations/{case_id}/summary correctly computes risks for multiple related wallets."""
+    create_res = client.post("/investigations", json={
+        "title": "Multiple Related Wallets Case",
+        "target_wallet": "0xW1",
+        "related_wallets": ["0xRelA", "0xRelB", "0xRelC"],
+    })
+    case_id = create_res.json()["case_id"]
+
+    res = client.get(f"/investigations/{case_id}/summary")
+    assert res.status_code == 200
+    data = res.json()
+    assert set(data["related_wallet_risks"].keys()) == {"0xRelA", "0xRelB", "0xRelC"}
+    for w in ["0xRelA", "0xRelB", "0xRelC"]:
+        assert data["related_wallet_risks"][w]["wallet_id"] == w
+        assert "risk_score" in data["related_wallet_risks"][w]
+        assert "risk_level" in data["related_wallet_risks"][w]

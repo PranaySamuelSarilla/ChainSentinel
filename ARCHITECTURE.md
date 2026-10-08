@@ -82,7 +82,7 @@ ChainSentinel/
     │   ├── clusters.py               # Dense subgraph / community detector
     │   ├── risk.py                   # Additive risk scoring engine
     │   └── engine.py                 # DetectionEngine orchestrator and graph extractor
-    ├── investigations/               # Investigation case workflow (Phase 4A)
+    ├── investigations/               # Investigation case workflow (Phase 4A & Phase 4B-1)
     │   ├── __init__.py               # Package exports
     │   ├── models.py                 # InvestigationCase domain model & case ID generator
     │   └── store.py                  # In-memory case repository with JSON persistence
@@ -92,7 +92,7 @@ ChainSentinel/
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
         ├── test_detection.py         # Phase 3 detection tests (56 tests)
-        └── test_investigations.py    # Phase 4A investigation tests (17 tests)
+        └── test_investigations.py    # Phase 4A/4B-1 investigation tests (22 tests)
 ```
 
 ---
@@ -120,7 +120,7 @@ The backend is built with **FastAPI** (`backend/main.py`), running under **Uvico
   - Detection results (`/alerts`, `/alerts/{alert_id}`, `/detection/summary`)
   - Wallet analytics (`/wallets/{wallet_id}/risk`, `/wallets/{wallet_id}/alerts`, `/wallets/{wallet_id}/transactions`)
   - Topological exploration (`/graph/{wallet_id}`)
-  - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`)
+  - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`, `/investigations/{case_id}/summary`)
 
 ---
 
@@ -171,7 +171,7 @@ The detection architecture (`backend/detection/`) separates concerns across spec
 
 ---
 
-## Investigation Workflow Layer (Phase 4A)
+## Investigation Workflow Layer (Phase 4A & Phase 4B-1)
 
 The investigation workflow provides analyst case management on top of the detection engine:
 
@@ -181,6 +181,8 @@ The investigation workflow provides analyst case management on top of the detect
 2. **`store.py` (`backend/investigations/store.py`)**:
    - `InvestigationCaseStore`: In-memory repository with thread-safe dictionary lookup and automatic JSON file persistence (`cases.json`). Survives process restarts while avoiding database configuration complexity for the MVP.
    - Singleton instance `CASE_STORE` shared across API route handlers.
+3. **Forensic Summary Aggregation (`GET /investigations/{case_id}/summary`)**:
+   - Assembles a unified forensic dossier: case metadata, resolved alert objects, target wallet risk assessment, target wallet transaction history, and risk assessments for all tagged related wallets in a single query.
 
 
 ## Risk Model

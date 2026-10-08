@@ -25,6 +25,9 @@ Endpoints:
     GET  /investigations/{case_id}
     PATCH /investigations/{case_id}/status
     PATCH /investigations/{case_id}/notes
+
+  Phase 4B-1 (investigation summary):
+    GET  /investigations/{case_id}/summary
 """
 
 from datetime import datetime, timezone
@@ -68,6 +71,7 @@ ENGINE = DetectionEngine(DATASET)
 
 # Pre-warm the engine cache at startup (runs all detectors once)
 _ALL_ALERTS = ENGINE.detect_all()
+_ALERTS_BY_ID = {a.alert_id: a for a in _ALL_ALERTS}
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -359,3 +363,42 @@ def update_investigation_notes(case_id: str, payload: UpdateCaseNotesRequest):
 
     updated = CASE_STORE.update_notes(case_id, payload.notes)
     return updated.to_dict()
+
+
+@app.get("/investigations/{case_id}/summary")
+def get_investigation_summary(case_id: str):
+    """
+    Retrieve comprehensive forensic investigation summary for a case.
+    Aggregates case metadata, resolved alert objects, target wallet risk assessment,
+    inbound and outbound transactions for the target wallet, and risk assessments
+    for any tagged related wallets.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    target_risk = ENGINE.get_wallet_risk(case.target_wallet).to_dict()
+
+    resolved_alerts = [
+        _ALERTS_BY_ID[aid].to_dict()
+        for aid in case.alert_ids
+        if aid in _ALERTS_BY_ID
+    ]
+
+    wallet_txs = [
+        t for t in DATASET
+        if t["from_wallet"] == case.target_wallet or t["to_wallet"] == case.target_wallet
+    ]
+
+    related_risks = {
+        wallet_addr: ENGINE.get_wallet_risk(wallet_addr).to_dict()
+        for wallet_addr in case.related_wallets
+    }
+
+    return {
+        "case": case.to_dict(),
+        "target_wallet_risk": target_risk,
+        "resolved_alerts": resolved_alerts,
+        "wallet_transactions": wallet_txs,
+        "related_wallet_risks": related_risks,
+    }
