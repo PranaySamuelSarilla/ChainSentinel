@@ -10,9 +10,21 @@ import {
   Search,
   AlertTriangle,
   Layers,
-  Compass
+  Compass,
+  Radar,
+  GitMerge,
+  ShieldAlert,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  Users
 } from 'lucide-react';
-import { getWalletRisk, getWalletTransactions, getWalletGraph } from '../api';
+import {
+  getWalletRisk,
+  getWalletTransactions,
+  getWalletGraph,
+  getWalletIntelligence
+} from '../api';
 import GraphViewer from './GraphViewer';
 
 const PRESET_WALLETS = [
@@ -21,6 +33,18 @@ const PRESET_WALLETS = [
   { label: 'Fan-In Collector', address: '0x9999f8e404F75eB9Ac49A1B3a0279c78D548F567', desc: 'Smurfing aggregation' },
   { label: 'Cluster Ring Node', address: '0xEE01000000000000000000000000000000000001', desc: 'Mixing ring node' },
 ];
+
+const CLASSIFICATION_COLORS = {
+  NORMAL: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
+  HIGH_VOLUME: 'bg-sky-950/80 text-sky-300 border-sky-700/60',
+  HIGH_VELOCITY: 'bg-amber-950/80 text-amber-300 border-amber-700/60',
+  FAN_OUT: 'bg-orange-950/80 text-orange-300 border-orange-700/60',
+  FAN_IN: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60',
+  CIRCULAR: 'bg-pink-950/80 text-pink-300 border-pink-700/60',
+  MIXER_LIKE: 'bg-purple-950/80 text-purple-300 border-purple-700/60',
+  MULTI_PATTERN: 'bg-fuchsia-950/80 text-fuchsia-300 border-fuchsia-700/60',
+  HIGH_RISK: 'bg-rose-950/80 text-rose-300 border-rose-700/60',
+};
 
 export default function WalletInvestigationView({
   initialWallet = '0x71C8366420A85E1A0F9b123D377De304559B0975',
@@ -34,6 +58,7 @@ export default function WalletInvestigationView({
   const [risk, setRisk] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [graphData, setGraphData] = useState(null);
+  const [intelligence, setIntelligence] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -45,14 +70,16 @@ export default function WalletInvestigationView({
     setLoading(true);
     setError(null);
     try {
-      const [riskRes, txsRes, graphRes] = await Promise.all([
+      const [riskRes, txsRes, graphRes, intelRes] = await Promise.all([
         getWalletRisk(cleanAddr),
         getWalletTransactions(cleanAddr, 50),
         getWalletGraph(cleanAddr, hopDepth),
+        getWalletIntelligence(cleanAddr).catch(() => null),
       ]);
       setRisk(riskRes);
       setTransactions(txsRes.transactions || []);
       setGraphData(graphRes);
+      setIntelligence(intelRes);
       setActiveWallet(cleanAddr);
       setWalletInput(cleanAddr);
     } catch (err) {
@@ -96,6 +123,8 @@ export default function WalletInvestigationView({
         return 'bg-slate-800 text-slate-300 border-slate-700';
     }
   };
+
+  const behavior = intelligence?.behavior_profile;
 
   return (
     <div className="space-y-6">
@@ -173,6 +202,11 @@ export default function WalletInvestigationView({
                 <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-bold ${getSeverityBadge(risk.risk_level)}`}>
                   {risk.risk_level} RISK
                 </span>
+                {intelligence?.investigation_priority && (
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-bold ${getSeverityBadge(intelligence.investigation_priority)}`}>
+                    {intelligence.investigation_priority} PRIORITY
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pt-0.5">
@@ -190,7 +224,7 @@ export default function WalletInvestigationView({
               </div>
 
               <p className="text-xs text-slate-300 leading-relaxed font-sans max-w-3xl pt-1">
-                {risk.explanation}
+                {intelligence?.explanation || risk.explanation}
               </p>
             </div>
 
@@ -228,7 +262,7 @@ export default function WalletInvestigationView({
             </div>
           </div>
 
-          {/* Pattern tags */}
+          {/* Implicated topologies */}
           {risk.pattern_types?.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/60">
               <span className="text-[11px] font-mono text-slate-500">Implicated Topologies:</span>
@@ -240,6 +274,166 @@ export default function WalletInvestigationView({
                   {p}
                 </span>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Phase 8: Behavioral Profiling & Forensics Intelligence Card */}
+      {behavior && (
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+              <Radar className="w-4 h-4 text-indigo-400" /> Behavioral Forensics &amp; Flow Dynamics
+            </h3>
+            <span className="text-[10px] font-mono text-slate-500">
+              Deterministic Profiling &bull; Phase 8 Intelligence
+            </span>
+          </div>
+
+          {/* Classifications Tags */}
+          <div className="space-y-2">
+            <div className="text-[11px] font-mono text-slate-400">Assigned Behavioral Classifications:</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {behavior.classifications.map((c) => (
+                <div
+                  key={c.name}
+                  className={`p-3 rounded-xl border text-xs font-mono space-y-1 ${
+                    CLASSIFICATION_COLORS[c.name] || 'bg-slate-950 border-slate-800 text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold">
+                    <span>{c.label}</span>
+                    <span className="text-[10px] uppercase opacity-75">{c.severity}</span>
+                  </div>
+                  <p className="text-[11px] font-sans opacity-90 leading-tight">
+                    {c.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Flow Metrics Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono space-y-0.5">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <TrendingUp className="w-3 h-3 text-emerald-400" /> Inbound Flow
+              </span>
+              <div className="text-base font-bold text-emerald-400">
+                {behavior.inbound_volume?.toFixed(2)} ETH
+              </div>
+              <div className="text-[10px] text-slate-400">{behavior.inbound_tx_count} transfers</div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono space-y-0.5">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <TrendingDown className="w-3 h-3 text-rose-400" /> Outbound Flow
+              </span>
+              <div className="text-base font-bold text-rose-400">
+                {behavior.outbound_volume?.toFixed(2)} ETH
+              </div>
+              <div className="text-[10px] text-slate-400">{behavior.outbound_tx_count} transfers</div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono space-y-0.5">
+              <span className="text-[10px] text-slate-500 uppercase">Net Flow</span>
+              <div className={`text-base font-bold ${behavior.net_flow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {behavior.net_flow >= 0 ? '+' : ''}{behavior.net_flow?.toFixed(2)} ETH
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {behavior.net_flow >= 0 ? 'Net Accumulator' : 'Net Distributor'}
+              </div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono space-y-0.5">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <Users className="w-3 h-3 text-indigo-400" /> Counterparties
+              </span>
+              <div className="text-base font-bold text-white">
+                {behavior.unique_counterparties_count}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {behavior.unique_inbound_counterparties_count} in / {behavior.unique_outbound_counterparties_count} out
+              </div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono space-y-0.5">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <Clock className="w-3 h-3 text-amber-400" /> Frequency
+              </span>
+              <div className="text-base font-bold text-amber-400">
+                {behavior.tx_frequency_per_hour?.toFixed(1)} /hr
+              </div>
+              <div className="text-[10px] text-slate-400">
+                Active: {(behavior.active_time_span_seconds / 60)?.toFixed(0)}m
+              </div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 font-mono space-y-0.5">
+              <span className="text-[10px] text-slate-500 uppercase">Avg / Peak Tx</span>
+              <div className="text-base font-bold text-indigo-300">
+                {behavior.avg_tx_value?.toFixed(1)} ETH
+              </div>
+              <div className="text-[10px] text-slate-400">
+                Peak: {behavior.largest_tx_value?.toFixed(1)} ETH
+              </div>
+            </div>
+          </div>
+
+          {/* Observable Signals */}
+          {behavior.signals?.length > 0 && (
+            <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+              <span className="text-[10px] font-mono uppercase text-slate-500">
+                Observable Forensic Signals:
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
+                {behavior.signals.map((sig, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded-lg bg-slate-950/80 border border-slate-800/80 text-slate-300 flex items-center gap-2"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span className="truncate">{sig}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Cross-Pattern Correlations for this wallet */}
+          {intelligence?.correlations?.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-800/80">
+              <div className="flex items-center gap-1.5 text-[11px] font-mono text-purple-400 font-bold">
+                <GitMerge className="w-3.5 h-3.5 text-purple-400" />
+                Cross-Pattern Convergence Events ({intelligence.correlations.length})
+              </div>
+              <div className="space-y-2">
+                {intelligence.correlations.map((corr) => (
+                  <div
+                    key={corr.correlation_id}
+                    className="bg-purple-950/20 border border-purple-800/50 rounded-xl p-3 text-xs space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between font-mono">
+                      <span className="font-bold text-purple-300">{corr.title}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getSeverityBadge(corr.severity)}`}>
+                        {corr.severity}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 font-sans text-xs leading-relaxed">
+                      {corr.explanation}
+                    </p>
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                      <span>Converging Patterns:</span>
+                      {corr.converging_patterns.map((p) => (
+                        <span key={p} className="px-1.5 py-0.2 rounded bg-purple-900/60 text-purple-200 border border-purple-700">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

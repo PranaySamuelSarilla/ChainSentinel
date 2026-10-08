@@ -13,8 +13,9 @@
 - **Phase 5 — Cryptographic Evidence Integrity & Merkle Verification**: COMPLETE
 - **Phase 6 — Advanced Investigation Workflow**: COMPLETE
 - **Phase 7 — Flow Tracer & Path Reconstruction**: COMPLETE
+- **Phase 8 — Advanced Analytics & Intelligence**: COMPLETE
 
-**Current Next Phase**: **Phase 8 (Awaiting user authorization)**
+**Current Next Phase**: **Phase 9 (Awaiting user authorization)**
 
 ---
 
@@ -75,7 +76,13 @@
   - Visual route canvas with neon path emphasizing source (emerald), destination (purple), path hops (cyan), and non-path dimming.
   - Chronological hop-by-hop ledger detailing sender/recipient risk, amount, timestamp, tx hash, and forensic signatures.
   - Direct integration to anchor reconstructed flow paths as cryptographic case evidence.
-- **Automated Tests (`backend/tests/`)**: 148 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, investigation workflow, timeline chronology, cryptographic evidence integrity, and flow path reconstruction (100% passing).
+- **Advanced Analytics & Behavioral Intelligence (`backend/analytics/`)**:
+  - `WalletBehaviorProfiler` deterministic feature extraction calculating turnover volumes, net flow, counterparty breadths, transaction velocity, holding durations, and active spans.
+  - 9 explainable behavioral classifications: `NORMAL`, `HIGH_VOLUME`, `HIGH_VELOCITY`, `FAN_OUT`, `FAN_IN`, `CIRCULAR`, `MIXER_LIKE`, `MULTI_PATTERN`, and `HIGH_RISK`.
+  - `AlertCorrelator` deterministic cross-pattern convergence engine identifying multi-topology convergence events (e.g. Circular + Rapid Movement + Mixing Ring on identical entity clusters) with confidence rating and plain-English narratives.
+  - `IntelligenceEngine` central facade providing wallet-level intelligence dossiers, ranked and filtered multi-criteria wallet profiling, global network summary metrics, and executive-level strategic case dossiers with priority scoring, counterparty threat matrices, and Merkle status integration.
+  - Full frontend intelligence visualization across Dashboard (classification pills, top correlations feed, priority targets), Wallet Deep Dive (behavioral forensics card, flow dynamics grid, observable signals, cross-pattern convergence cards), and Case Management (executive intelligence dossier, priority badge, narrative summary, suspicious counterparties threat matrix).
+- **Automated Tests (`backend/tests/`)**: 169 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, investigation workflow, timeline chronology, cryptographic evidence integrity, flow path reconstruction, and advanced analytics/intelligence (100% passing).
 
 ---
 
@@ -190,6 +197,11 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `POST` | `/investigations/{case_id}/evidence/merkle/verify` | Body: `expected_root` (string) | Verify case evidence collection against expected Merkle root and audit individual leaves |
 | `GET` | `/flow/trace` | `source` (required address), `target` (optional address), `max_depth` (1-6, default 4) | Reconstruct directed transaction flow path(s) between wallets or discover downstream flow network; returns path metrics, hops detail, suspicion score, and Cytoscape graph |
 | `GET` | `/investigations/{case_id}/flow` | `case_id` (string), `target` (optional address), `max_depth` (1-6, default 4) | Reconstruct fund flow anchored to an investigation case's target wallet and linked entities |
+| `GET` | `/analytics/wallet/{wallet_id}` | `wallet_id` (address string) | Retrieve comprehensive behavioral profile, explainable risk assessment, observable signals, and cross-pattern correlations |
+| `GET` | `/analytics/wallets` | `limit`, `offset`, `classification`, `priority`, `min_risk` | Paginated and ranked behavioral profiles for all wallets in the network |
+| `GET` | `/analytics/summary` | None | Network-wide intelligence summary: classification breakdown, priority distribution, top correlations, and top targets |
+| `GET` | `/analytics/correlations` | `severity` (optional), `wallet` (optional) | Cross-pattern correlation convergence events where distinct suspicious topologies intersect |
+| `GET` | `/analytics/investigations/{case_id}` | `case_id` (string) | Executive strategic intelligence dossier for investigation case with priority score, target behavior, counterparty threat matrix, and Merkle status |
 
 ---
 
@@ -210,8 +222,9 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 
 ## Current Phase
 
-- **Current Status**: **Phase 7 Complete** (Phase 7: Flow Tracer & Path Reconstruction: dedicated NetworkX multi-hop path reconstruction, temporal ordering, deterministic path suspicion scoring, closed cycle loop detection, downstream outflow discovery, Cytoscape visual path highlighting with non-path dimming, interactive FlowTracerView command cockpit, case evidence integration hook, 148 tests passing, 0 frontend lint errors, clean production build)
-- **Next Task**: **Phase 8 (Awaiting user authorization)**
+- **Current Status**: **Phase 8 Complete** (Phase 8: Advanced Analytics & Intelligence: behavioral wallet profiling across 9 explainable classifications, multi-pattern alert convergence correlation, explainable forensic signal generation, network-wide intelligence summary, executive strategic investigation dossier, 5 new REST endpoints, interactive frontend visualizations in Dashboard, Wallet Deep Dive, and Case Management, 169 backend tests passing, 0 frontend lint errors, clean production build)
+- **Next Task**: **Phase 9 (Awaiting user authorization)**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.
+
 

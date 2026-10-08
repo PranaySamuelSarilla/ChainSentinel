@@ -150,7 +150,7 @@ export default function App() {
             <h1 className="text-lg font-bold tracking-wider text-white flex items-center gap-2">
               CHAIN<span className="text-indigo-400">SENTINEL</span>
               <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-300 px-2 py-0.5 rounded border border-indigo-700/60 font-bold">
-                Platform Phase 7
+                Platform Phase 8
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">Blockchain Forensic Intelligence & Investigation Cockpit</p>

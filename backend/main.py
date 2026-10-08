@@ -46,6 +46,13 @@ Endpoints:
   Phase 7 (flow tracer & path reconstruction):
     GET  /flow/trace
     GET  /investigations/{case_id}/flow
+
+  Phase 8 (advanced analytics & intelligence):
+    GET  /analytics/wallet/{wallet_id}
+    GET  /analytics/wallets
+    GET  /analytics/summary
+    GET  /analytics/correlations
+    GET  /analytics/investigations/{case_id}
 """
 
 from datetime import datetime, timezone
@@ -69,6 +76,7 @@ try:
     from backend.crypto.canonical import compute_evidence_hash, verify_evidence_hash
     from backend.crypto.merkle import MerkleTree, compute_merkle_root
     from backend.crypto.store import EVIDENCE_STORE
+    from backend.analytics.intelligence import IntelligenceEngine
 except (ImportError, ModuleNotFoundError):
     from data.loader import load_transactions, get_dataset_stats
     from detection.engine import DetectionEngine
@@ -84,6 +92,7 @@ except (ImportError, ModuleNotFoundError):
     from crypto.canonical import compute_evidence_hash, verify_evidence_hash
     from crypto.merkle import MerkleTree, compute_merkle_root
     from crypto.store import EVIDENCE_STORE
+    from analytics.intelligence import IntelligenceEngine
 
 app = FastAPI(
     title="ChainSentinel API",
@@ -110,6 +119,9 @@ ENGINE = DetectionEngine(DATASET)
 # Pre-warm the engine cache at startup (runs all detectors once)
 _ALL_ALERTS = ENGINE.detect_all()
 _ALERTS_BY_ID = {a.alert_id: a for a in _ALL_ALERTS}
+
+# Initialize Intelligence & Analytics Engine (Phase 8)
+INTEL_ENGINE = IntelligenceEngine(ENGINE._transactions, ENGINE)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -799,5 +811,104 @@ def trace_case_flow(
         )
 
     return ENGINE.trace_flow(source=case.target_wallet, target=target_wallet, max_depth=max_depth)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 8 Endpoints — Advanced Analytics & Intelligence
+# ──────────────────────────────────────────────────────────────────
+
+@app.get("/analytics/wallet/{wallet_id}")
+def get_wallet_intelligence(wallet_id: str):
+    """
+    Retrieve comprehensive behavioral profile, explainable risk assessment,
+    observable forensic signals, and multi-pattern correlations for a wallet.
+    """
+    clean_id = wallet_id.strip()
+    intel = INTEL_ENGINE.get_wallet_intelligence(clean_id)
+    if not intel:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Wallet '{clean_id}' does not exist in transaction dataset",
+        )
+    return intel.to_dict()
+
+
+@app.get("/analytics/wallets")
+def list_wallets_analytics(
+    limit: int = Query(50, ge=1, le=200, description="Page size limit"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    classification: Optional[str] = Query(None, description="Filter by classification, e.g. NORMAL, CIRCULAR, HIGH_RISK"),
+    priority: Optional[str] = Query(None, description="Filter by priority, e.g. LOW, MEDIUM, HIGH, CRITICAL"),
+    min_risk: float = Query(0.0, ge=0.0, le=100.0, description="Minimum risk score"),
+):
+    """
+    Retrieve ranked and paginated list of behavioral profiles for all wallets in the system.
+    Supports filtering by behavioral classification, investigation priority, and minimum risk score.
+    """
+    return INTEL_ENGINE.get_all_wallet_profiles(
+        limit=limit,
+        offset=offset,
+        classification=classification,
+        priority=priority,
+        min_risk=min_risk,
+    )
+
+
+@app.get("/analytics/summary")
+def get_analytics_summary():
+    """
+    Retrieve global network intelligence summary including behavioral classification breakdown,
+    priority distribution, cross-pattern correlations count, and top priority targets.
+    """
+    return INTEL_ENGINE.get_network_summary()
+
+
+@app.get("/analytics/correlations")
+def list_correlations(
+    severity: Optional[str] = Query(None, description="Filter by severity (CRITICAL, HIGH, MEDIUM, LOW)"),
+    wallet: Optional[str] = Query(None, description="Filter correlations involving this wallet"),
+):
+    """
+    Retrieve all multi-pattern correlation events where distinct suspicious topologies converge
+    on the same wallet, entity cluster, or time window.
+    """
+    correlations = INTEL_ENGINE.get_all_correlations()
+    if severity:
+        sev_upper = severity.upper()
+        correlations = [c for c in correlations if c.severity == sev_upper]
+    if wallet:
+        w_clean = wallet.strip()
+        correlations = [
+            c for c in correlations
+            if c.primary_wallet == w_clean or w_clean in c.participating_wallets
+        ]
+    return {
+        "total": len(correlations),
+        "correlations": [c.to_dict() for c in correlations],
+    }
+
+
+@app.get("/analytics/investigations/{case_id}")
+def get_investigation_intelligence(case_id: str):
+    """
+    Generate an executive-level strategic intelligence dossier for an investigation case,
+    including priority score, target behavioral analysis, counterparty risk matrix,
+    cross-pattern convergence events, and cryptographic Merkle integrity status.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Investigation case '{case_id}' not found",
+        )
+
+    intel = INTEL_ENGINE.get_investigation_intelligence(case_id)
+    if not intel:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Intelligence dossier could not be compiled for case '{case_id}' (target wallet may not exist in ledger)",
+        )
+    return intel.to_dict()
+
 
 

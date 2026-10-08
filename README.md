@@ -33,7 +33,9 @@ ChainSentinel/
 │   │   └── __init__.py
 │   ├── crypto/                   # SHA-256 & Merkle Tree verification (Phase 5)
 │   │   └── __init__.py
-│   ├── tests/                    # Automated pytest suite
+│   ├── analytics/                # Behavioral profiling & intelligence (Phase 8)
+│   │   └── __init__.py
+│   ├── tests/                    # Automated pytest suite (169 tests)
 │   │   ├── test_basic.py         # Tests for dataset and API endpoints
 │   ├── main.py                   # FastAPI application & REST endpoints
 │   ├── requirements.txt          # Python dependencies
@@ -132,13 +134,15 @@ Run the backend test suite:
 .\backend\venv\Scripts\python.exe -m pytest backend/tests -v
 ```
 
-All 7 test cases verify:
-- Health check endpoint availability
-- Synthetic dataset category coverage
-- Circular topology validation (Origin matches final recipient)
-- Info stats endpoint
-- Transaction listing and category filters
-- Single transaction hash retrieval
+All 169 automated tests verify:
+- Health check and platform statistics endpoints
+- Synthetic dataset topological integrity
+- Six modular graph detection algorithms (Circular, Rapid, Burst, Split, Recomb, Cluster)
+- Deterministic risk scoring and severity aggregation
+- Investigation case management, summaries, graphs, and audit timelines
+- Cryptographic evidence canonicalization, SHA-256 digests, and Merkle tree audits
+- Multi-hop directed flow tracer and path reconstruction
+- Behavioral wallet profiling, 9 explainable classifications, and cross-pattern alert correlation
 
 ---
 
@@ -151,6 +155,6 @@ All 7 test cases verify:
 - [x] **Phase 5**: Cryptographic Evidence Integrity & Merkle Tree Verification (Canonical JSON, SHA-256 digests, Merkle root audits, tamper detection APIs)
 - [x] **Phase 6**: Advanced Investigation Workflow (End-to-end flow: Alert → Wallet Deep Dive → Case Dossier → Evidence Anchoring → Merkle Audit → Investigation Chronology Timeline → Closure)
 - [x] **Phase 7**: Flow Tracer & Path Reconstruction (Multi-hop path routing, temporal consistency, deterministic suspicion scoring, Cytoscape path visual highlighting, downstream discovery)
-- [ ] **Phase 8**: Evidence Export & Case Notarization
+- [x] **Phase 8**: Advanced Analytics & Intelligence (Behavioral profiling, 9 explainable classifications, multi-pattern alert correlation, executive strategic dossiers, 5 REST endpoints, frontend intelligence visualizations)
 - [ ] **Phase 9**: Full End-to-End System Integration
 - [ ] **Phase 10**: Complete Demo Verification & Polish

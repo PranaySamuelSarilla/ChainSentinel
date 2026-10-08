@@ -12,7 +12,11 @@ import {
   ShieldCheck,
   FilePlus2,
   ExternalLink,
-  Compass
+  Compass,
+  Radar,
+  GitMerge,
+  FileText,
+  ShieldAlert
 } from 'lucide-react';
 import {
   getInvestigations,
@@ -21,7 +25,8 @@ import {
   updateInvestigationNotes,
   getInvestigationGraph,
   getCaseEvidence,
-  getCaseMerkleRoot
+  getCaseMerkleRoot,
+  getInvestigationIntelligence
 } from '../api';
 import GraphViewer from './GraphViewer';
 import AddEvidenceModal from './AddEvidenceModal';
@@ -38,6 +43,7 @@ export default function InvestigationsView({
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedCaseId, setSelectedCaseId] = useState(initialCaseId);
   const [caseSummary, setCaseSummary] = useState(null);
+  const [caseIntelligence, setCaseIntelligence] = useState(null);
   const [caseGraphData, setCaseGraphData] = useState(null);
   const [showCaseGraph, setShowCaseGraph] = useState(false);
 
@@ -108,11 +114,13 @@ export default function InvestigationsView({
     setShowCaseGraph(false);
     setCaseGraphData(null);
     try {
-      const [data] = await Promise.all([
+      const [data, intel] = await Promise.all([
         getInvestigationSummary(caseId),
+        getInvestigationIntelligence(caseId).catch(() => null),
         fetchEvidenceData(caseId),
       ]);
       setCaseSummary(data);
+      setCaseIntelligence(intel);
       setNotesDraft(data.case?.notes || '');
     } catch (err) {
       console.error('Failed to load case summary:', err);
@@ -537,6 +545,142 @@ export default function InvestigationsView({
                   <p className="text-xs text-slate-300 leading-relaxed font-sans pt-1">
                     {caseSummary.target_wallet_risk.explanation}
                   </p>
+                </div>
+              )}
+
+              {/* Executive Strategic Intelligence Dossier (Phase 8) */}
+              {caseIntelligence && (
+                <div className="bg-gradient-to-br from-indigo-950/40 via-slate-900 to-purple-950/30 border border-indigo-900/60 rounded-xl p-5 space-y-4 shadow-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-900/40 pb-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                        <Radar className="w-4 h-4 text-indigo-400" /> Executive Intelligence Dossier
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                        Strategic triage score: {caseIntelligence.priority_score?.toFixed(1)} / 100
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-mono px-3 py-1 rounded-lg border uppercase font-bold ${getSeverityBadge(caseIntelligence.priority)}`}>
+                        {caseIntelligence.priority} PRIORITY
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Executive Narrative */}
+                  <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5 space-y-1">
+                    <div className="text-[10px] font-mono uppercase text-indigo-400 flex items-center gap-1 font-bold">
+                      <FileText className="w-3.5 h-3.5" /> Executive Summary Narrative
+                    </div>
+                    <p className="text-xs text-slate-200 leading-relaxed font-sans">
+                      {caseIntelligence.executive_summary}
+                    </p>
+                  </div>
+
+                  {/* High-Level Forensic Case Metrics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                    <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-0.5">
+                      <span className="text-[10px] text-slate-500 uppercase">Case Turnover</span>
+                      <div className="text-sm font-bold text-indigo-300">
+                        {caseIntelligence.total_case_volume_eth?.toFixed(2)} ETH
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-0.5">
+                      <span className="text-[10px] text-slate-500 uppercase">Case Alerts</span>
+                      <div className="text-sm font-bold text-white">
+                        {caseIntelligence.alert_count} ({caseIntelligence.high_risk_alert_count} high-risk)
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-0.5">
+                      <span className="text-[10px] text-slate-500 uppercase">Dominant Patterns</span>
+                      <div className="text-xs font-bold text-slate-300 truncate">
+                        {caseIntelligence.dominant_patterns?.length > 0
+                          ? caseIntelligence.dominant_patterns.join(', ')
+                          : 'None'}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-0.5">
+                      <span className="text-[10px] text-slate-500 uppercase">Merkle Proof</span>
+                      <div className="text-xs font-bold text-emerald-400 truncate">
+                        {caseIntelligence.evidence_integrity_status}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Suspicious Counterparties Threat Matrix */}
+                  {caseIntelligence.suspicious_counterparties?.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-indigo-900/30">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-slate-400 font-bold flex items-center gap-1.5">
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                          Suspicious Counterparties Threat Matrix ({caseIntelligence.suspicious_counterparties.length})
+                        </span>
+                        <span className="text-[10px] text-slate-500">Associated entities with elevated risk</span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {caseIntelligence.suspicious_counterparties.map((cp) => (
+                          <div
+                            key={cp.wallet_id}
+                            className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 flex items-center justify-between text-xs font-mono"
+                          >
+                            <div className="space-y-0.5 truncate mr-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-200 font-bold truncate">{cp.wallet_id}</span>
+                                <span className={`text-[10px] px-1.5 py-0.2 rounded border uppercase font-bold ${getSeverityBadge(cp.priority)}`}>
+                                  {cp.priority}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                                <span>Risk: {cp.risk_score}/100</span>
+                                <span>&bull;</span>
+                                <span>Classifications: {cp.classifications?.join(', ') || 'N/A'}</span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => onInvestigateWallet(cp.wallet_id)}
+                              className="px-2.5 py-1 text-[10px] font-mono rounded bg-slate-900 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-800 transition-colors shrink-0"
+                            >
+                              Investigate
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cross-Pattern Convergence Signals */}
+                  {caseIntelligence.correlations?.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-indigo-900/30">
+                      <div className="text-xs font-mono text-purple-300 font-bold flex items-center gap-1.5">
+                        <GitMerge className="w-3.5 h-3.5 text-purple-400" />
+                        Cross-Pattern Topological Convergence ({caseIntelligence.correlations.length})
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {caseIntelligence.correlations.map((c) => (
+                          <div
+                            key={c.correlation_id}
+                            className="bg-purple-950/30 border border-purple-800/50 rounded-xl p-2.5 text-xs font-mono flex items-center justify-between"
+                          >
+                            <div className="space-y-0.5">
+                              <span className="font-bold text-white">{c.title}</span>
+                              <div className="text-[11px] text-slate-300 font-sans">{c.explanation}</div>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold shrink-0 ml-3 ${getSeverityBadge(c.severity)}`}>
+                              {c.severity}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

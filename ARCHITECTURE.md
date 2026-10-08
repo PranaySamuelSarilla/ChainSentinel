@@ -108,13 +108,20 @@ ChainSentinel/
     │   ├── canonical.py              # Deterministic JSON canonicalization & SHA-256 hashing
     │   ├── merkle.py                 # Binary Merkle tree, odd-leaf balancing & inclusion proofs
     │   └── store.py                  # In-memory evidence store with JSON persistence
-    └── tests/                        # Automated test suite (148 tests passing)
+    ├── analytics/                    # Advanced Analytics & Behavioral Intelligence (Phase 8)
+    │   ├── __init__.py               # Package exports
+    │   ├── models.py                 # Profile, classification, correlation & dossier dataclasses
+    │   ├── profiler.py               # Deterministic feature extraction & behavioral classification
+    │   ├── correlator.py             # Multi-pattern alert correlation & convergence detector
+    │   └── intelligence.py           # Unified IntelligenceEngine facade & case dossier compiler
+    └── tests/                        # Automated test suite (169 tests passing)
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
         ├── test_detection.py         # Phase 3 detection tests (56 tests)
         ├── test_flow_tracer.py       # Phase 7 flow tracer & path reconstruction tests (18 tests)
         ├── test_investigations.py    # Phase 4/6 investigation & timeline tests (32 tests)
-        └── test_crypto.py            # Phase 5 cryptographic integrity tests (35 tests)
+        ├── test_crypto.py            # Phase 5 cryptographic integrity tests (35 tests)
+        └── test_analytics.py         # Phase 8 analytics & intelligence tests (21 tests)
 ```
 
 ---
@@ -413,6 +420,38 @@ circular.py             rapid_movement.py        burst.py / fanout.py    cluster
 
 ---
 
+## Phase 8 — Advanced Analytics & Behavioral Intelligence Architecture
+
+Phase 8 elevates ChainSentinel from raw pattern detection to explainable, strategic behavioral intelligence.
+
+### 1. Behavioral Profiling Engine (`backend/analytics/profiler.py`)
+- **Metric Extraction**: Extracts 20+ deterministic features per wallet: inbound/outbound transaction counts and volume, net flow (accumulator vs distributor), unique counterparty breadth, active time span, transaction frequency (tx/hour), and average/peak transfer sizes.
+- **Explainable Taxonomies (9 Behavioral Classifications)**:
+  - `NORMAL`: Standard operating baseline with balanced flows and zero alerts.
+  - `HIGH_VOLUME`: High-volume treasury transfers (>100 ETH) without malicious topology.
+  - `HIGH_VELOCITY`: Rapid passthrough hops forwarding funds with short hold periods (<300s).
+  - `FAN_OUT`: Smurfing dispersal distributing funds to multiple downstream destinations.
+  - `FAN_IN`: Liquidity consolidation collecting funds from multiple disparate feeders.
+  - `CIRCULAR`: Closed routing loops returning capital to the originating entity.
+  - `MIXER_LIKE`: High-density reciprocal circulation within tightly interconnected mixing rings.
+  - `MULTI_PATTERN`: Simultaneous convergence across >= 2 distinct suspicious topologies.
+  - `HIGH_RISK`: Elevated forensic risk scores (>= 60/100) with multiple high/critical alerts.
+- **Priority Tiering**: Maps behavioral signatures into deterministic investigation priorities: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
+- **Observable Signal Generation**: Synthesizes human-auditable evidence statements for court/analyst review.
+
+### 2. Alert Correlation Engine (`backend/analytics/correlator.py`)
+- **Topological Convergence**: Detects multi-pattern intersection where a wallet or tightly coupled entity cluster participates in multiple alert topologies simultaneously.
+- **Entity & Temporal Clustering**: Correlates alerts spanning shared wallets and overlapping time windows.
+- **Confidence & Severity Scoring**: Assigns deterministic confidence (`HIGH`, `MEDIUM`, `LOW`) and severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) based on pattern count and alert severity.
+- **Narrative Explanations**: Generates forensic explanations detailing exactly why the convergence represents an elevated laundering risk.
+
+### 3. Unified Intelligence Facade (`backend/analytics/intelligence.py`)
+- **`IntelligenceEngine` Orchestrator**: Singleton uniting the profiler, correlator, `DetectionEngine`, `CASE_STORE`, and `EVIDENCE_STORE`.
+- **Wallet Intelligence Dossier**: Complete dossier combining profile metrics, classifications, observable signals, correlated patterns, and risk narrative.
+- **Investigation-Level Strategic Dossier**: Executive intelligence brief including strategic priority score (0–100), case-level turnover volume, dominant pattern vectors, suspicious counterparty threat matrix, anchored evidence count, and cryptographic Merkle verification status.
+
+---
+
 ## Architectural Decisions
 
 1. **Rule-Based Deterministic Algorithms instead of ML**:
@@ -427,5 +466,7 @@ circular.py             rapid_movement.py        burst.py / fanout.py    cluster
    Provides automatic OpenAPI documentation (`/docs`), strong Pydantic typing, high throughput, and zero configuration for CORS.
 6. **Cytoscape.js for Graph Visualizations**:
    Cytoscape.js is the gold standard for high-performance canvas-based network graph visualization, supporting custom node badges, edge weights, and path highlighting.
-7. **Cryptographic Integrity Verification (Planned for Phase 8)**:
-   SHA-256 case hashing and Merkle tree root generation are planned for Phase 8 to provide tamper-proof evidence preservation.
+7. **Cryptographic Integrity & Merkle Preservation (Phase 5 & 6)**:
+   Deterministic canonical JSON serialization, SHA-256 standard digests, and RFC 6962-compliant binary Merkle trees anchor case evidence into tamper-evident proofs.
+8. **Explainable Behavioral Intelligence over Black-Box Scoring (Phase 8)**:
+   Behavioral profiling uses explicit, inspectable criteria (flow balance, counterparty breadth, velocity, loop topology) allowing forensic investigators to defend their conclusions under regulatory and legal examination.

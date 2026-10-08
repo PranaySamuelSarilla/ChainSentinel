@@ -222,3 +222,41 @@ export async function getCaseFlow(caseId, target = null, maxDepth = 4) {
   return request(url);
 }
 
+// ──────────────────────────────────────────────────────────────────
+// Advanced Analytics & Intelligence (Phase 8)
+// ──────────────────────────────────────────────────────────────────
+
+export async function getAnalyticsSummary() {
+  return request('/analytics/summary');
+}
+
+export async function getWalletsAnalytics({ limit = 50, offset = 0, classification, priority, min_risk } = {}) {
+  const params = new URLSearchParams();
+  if (limit) params.append('limit', limit);
+  if (offset) params.append('offset', offset);
+  if (classification) params.append('classification', classification);
+  if (priority) params.append('priority', priority);
+  if (min_risk !== undefined && min_risk !== null) params.append('min_risk', min_risk);
+
+  const qs = params.toString();
+  return request(qs ? `/analytics/wallets?${qs}` : '/analytics/wallets');
+}
+
+export async function getWalletIntelligence(walletId) {
+  return request(`/analytics/wallet/${encodeURIComponent(walletId)}`);
+}
+
+export async function getCorrelations({ severity, wallet } = {}) {
+  const params = new URLSearchParams();
+  if (severity) params.append('severity', severity);
+  if (wallet) params.append('wallet', wallet);
+
+  const qs = params.toString();
+  return request(qs ? `/analytics/correlations?${qs}` : '/analytics/correlations');
+}
+
+export async function getInvestigationIntelligence(caseId) {
+  return request(`/analytics/investigations/${encodeURIComponent(caseId)}`);
+}
+
+
