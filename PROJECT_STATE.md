@@ -5,15 +5,20 @@
 - **Phase 1 — Project Foundation**: COMPLETE
 - **Phase 2 — Synthetic Transaction Dataset & Basic APIs**: COMPLETE
 - **Phase 3 — Rule-Based Detection Engine**: COMPLETE
+- **Phase 4A — Investigation Case Model, Storage & Core APIs**: COMPLETE
 
-**Current Next Phase**: **Phase 4 — Backend/API refinement and preparation for the investigation workflow**
+**Current Next Sub-Phase**: **Phase 4B — Investigation flow tracing and remaining Phase 4 capabilities**
 
 ---
 
 ## Completed Features
 
 - **React + Vite Frontend (`frontend/`)**: React 19, Vite 8, Tailwind CSS v4, Lucide React icons, Cytoscape.js installed. Development server with backend API proxy (`/api` → `http://127.0.0.1:8000`), live backend health monitoring pill indicator, cyber-styled UI shell.
-- **FastAPI Backend (`backend/main.py`)**: Asynchronous REST service with CORS enabled for local development, in-memory pre-warmed detection cache, and full endpoints for transactions, alerts, risk scores, and graphs.
+- **FastAPI Backend (`backend/main.py`)**: Asynchronous REST service with CORS enabled for local development, in-memory pre-warmed detection cache, full endpoints for transactions, alerts, risk scores, graphs, and investigation cases.
+- **Investigation Workflow Backend (`backend/investigations/`)**:
+  - `InvestigationCase` domain model (`case_id`, `title`, `target_wallet`, `status`, `notes`, `alert_ids`, `related_wallets`, timestamps)
+  - `InvestigationCaseStore` singleton (`CASE_STORE`) providing in-memory lookup and JSON file persistence (`cases.json`)
+  - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`)
 - **Synthetic Transaction Dataset (`backend/data/transactions.csv`)**: 70 transactions across 70 wallets totaling 1,200.45 ETH, containing deliberate examples of 6 suspicious topologies and 4 normal activity patterns.
 - **Transaction Loader (`backend/data/loader.py`)**: High-performance dataset loader using Python standard library `csv` and typed records, returning summary metrics without external binary dependencies.
 - **Transaction APIs**: `GET /transactions` (with pagination and filtering by category or wallet) and `GET /transactions/{tx_id}`.
@@ -31,7 +36,7 @@
 - **Wallet Transactions**: `GET /wallets/{wallet_id}/transactions` returning all inbound and outbound transactions for a wallet.
 - **Graph API**: `GET /graph/{wallet_id}?depth=2` returning Cytoscape-formatted nodes and directed edges with flagging metadata.
 - **Detection Summary API**: `GET /detection/summary` returning global alert counts, breakdown by pattern, and breakdown by severity.
-- **Automated Tests (`backend/tests/`)**: 63 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, and REST endpoints (100% passing).
+- **Automated Tests (`backend/tests/`)**: 80 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, and the complete investigation workflow (100% passing).
 
 ---
 
@@ -130,6 +135,11 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `GET` | `/wallets/{wallet_id}/transactions`| `wallet_id`, `limit` (default 50) | Inbound and outbound transactions for the specified wallet |
 | `GET` | `/graph/{wallet_id}` | `wallet_id`, `depth` (1-3, default 2) | Subgraph JSON formatted for Cytoscape.js (`nodes`, `edges`, `flagged_wallets`) |
 | `GET` | `/detection/summary` | None | Aggregate metrics: `total_alerts`, `alerts_by_pattern`, `alerts_by_severity` |
+| `POST` | `/investigations` | Body: `title`, `target_wallet`, optional `notes`, `alert_ids`, `related_wallets` | Create an investigation case (201 Created); returns case object |
+| `GET` | `/investigations` | `status` (optional: `OPEN`, `CLOSED`) | List all investigation cases (newest first); returns array and total |
+| `GET` | `/investigations/{case_id}` | `case_id` (string) | Retrieve investigation case by ID; returns 404 if not found |
+| `PATCH` | `/investigations/{case_id}/status` | Body: `status` (`OPEN` or `CLOSED`) | Update investigation case status; returns updated case object |
+| `PATCH` | `/investigations/{case_id}/notes` | Body: `notes` (string) | Update investigation case notes; returns updated case object |
 
 ---
 
@@ -148,7 +158,7 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 
 ## Current Phase
 
-- **Current Status**: **Phase 3 Complete**
-- **Next Task**: **Phase 4 — Backend/API Refinement and Investigation Workflow Preparation**
+- **Current Status**: **Phase 4A Complete** (Investigation Case Model, Storage Layer & Core REST APIs)
+- **Next Task**: **Phase 4B — Investigation Flow Tracing and Remaining Backend Preparation**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.

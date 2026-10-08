@@ -15,11 +15,20 @@ Endpoints:
     GET /alerts/{alert_id}
     GET /wallets/{wallet_id}/risk
     GET /wallets/{wallet_id}/alerts
+    GET /wallets/{wallet_id}/transactions
     GET /graph/{wallet_id}
     GET /detection/summary
+
+  Phase 4A (investigation workflow):
+    POST /investigations
+    GET  /investigations
+    GET  /investigations/{case_id}
+    PATCH /investigations/{case_id}/status
+    PATCH /investigations/{case_id}/notes
 """
 
-from typing import Optional
+from datetime import datetime, timezone
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -27,9 +36,13 @@ from pydantic import BaseModel
 try:
     from backend.data.loader import load_transactions, get_dataset_stats
     from backend.detection.engine import DetectionEngine
+    from backend.investigations.models import InvestigationCase, CaseStatus, generate_case_id
+    from backend.investigations.store import CASE_STORE
 except (ImportError, ModuleNotFoundError):
     from data.loader import load_transactions, get_dataset_stats
     from detection.engine import DetectionEngine
+    from investigations.models import InvestigationCase, CaseStatus, generate_case_id
+    from investigations.store import CASE_STORE
 
 app = FastAPI(
     title="ChainSentinel API",
@@ -65,6 +78,22 @@ class HealthResponse(BaseModel):
     status: str
     message: str
     version: str
+
+
+class CreateInvestigationRequest(BaseModel):
+    title: str
+    target_wallet: str
+    notes: Optional[str] = ""
+    alert_ids: Optional[List[str]] = []
+    related_wallets: Optional[List[str]] = []
+
+
+class UpdateCaseStatusRequest(BaseModel):
+    status: str
+
+
+class UpdateCaseNotesRequest(BaseModel):
+    notes: str
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -231,3 +260,102 @@ def get_detection_summary():
     """
     summary = ENGINE.get_summary()
     return summary.to_dict()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 4A Endpoints — Investigation Workflow
+# ──────────────────────────────────────────────────────────────────
+
+@app.post("/investigations", status_code=201)
+def create_investigation(payload: CreateInvestigationRequest):
+    """
+    Create a new investigation case.
+    Validates required fields, generates a unique deterministic case ID,
+    and stores the case in the investigation repository.
+    """
+    title = payload.title.strip() if payload.title else ""
+    target_wallet = payload.target_wallet.strip() if payload.target_wallet else ""
+
+    if not title:
+        raise HTTPException(status_code=400, detail="title cannot be empty")
+    if not target_wallet:
+        raise HTTPException(status_code=400, detail="target_wallet cannot be empty")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    case_id = generate_case_id(target_wallet, now_iso)
+
+    case = InvestigationCase(
+        case_id=case_id,
+        title=title,
+        target_wallet=target_wallet,
+        status=CaseStatus.OPEN,
+        notes=payload.notes.strip() if payload.notes else "",
+        alert_ids=payload.alert_ids or [],
+        related_wallets=payload.related_wallets or [],
+        created_at=now_iso,
+        updated_at=now_iso,
+    )
+
+    try:
+        saved_case = CASE_STORE.create(case)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    return saved_case.to_dict()
+
+
+@app.get("/investigations")
+def list_investigations(
+    status: Optional[str] = Query(None, description="Filter by status (OPEN, CLOSED)"),
+):
+    """
+    List all investigation cases, ordered newest first.
+    Optionally filter by status.
+    """
+    cases = CASE_STORE.list_all()
+    if status:
+        norm_status = status.strip().upper()
+        cases = [c for c in cases if c.status == norm_status]
+
+    return {
+        "total": len(cases),
+        "investigations": [c.to_dict() for c in cases],
+    }
+
+
+@app.get("/investigations/{case_id}")
+def get_investigation(case_id: str):
+    """Retrieve details for a single investigation case by its case_id."""
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+    return case.to_dict()
+
+
+@app.patch("/investigations/{case_id}/status")
+def update_investigation_status(case_id: str, payload: UpdateCaseStatusRequest):
+    """Update the status of an investigation case (OPEN or CLOSED)."""
+    norm_status = payload.status.strip().upper() if payload.status else ""
+    if norm_status not in (CaseStatus.OPEN, CaseStatus.CLOSED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status '{payload.status}'. Status must be OPEN or CLOSED.",
+        )
+
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    updated = CASE_STORE.update_status(case_id, norm_status)
+    return updated.to_dict()
+
+
+@app.patch("/investigations/{case_id}/notes")
+def update_investigation_notes(case_id: str, payload: UpdateCaseNotesRequest):
+    """Update analyst notes for an investigation case."""
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    updated = CASE_STORE.update_notes(case_id, payload.notes)
+    return updated.to_dict()

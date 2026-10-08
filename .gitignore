@@ -8,6 +8,7 @@ __pycache__/
 *$py.class
 *.sqlite3
 *.db
+cases.json
 .pytest_cache/
 
 # Node

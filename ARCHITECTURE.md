@@ -82,12 +82,17 @@ ChainSentinel/
     │   ├── clusters.py               # Dense subgraph / community detector
     │   ├── risk.py                   # Additive risk scoring engine
     │   └── engine.py                 # DetectionEngine orchestrator and graph extractor
+    ├── investigations/               # Investigation case workflow (Phase 4A)
+    │   ├── __init__.py               # Package exports
+    │   ├── models.py                 # InvestigationCase domain model & case ID generator
+    │   └── store.py                  # In-memory case repository with JSON persistence
     ├── crypto/                       # Phase 8 cryptographic evidence verification
     │   └── __init__.py
     └── tests/                        # Automated test suite
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
-        └── test_detection.py         # Phase 3 detection tests (56 tests)
+        ├── test_detection.py         # Phase 3 detection tests (56 tests)
+        └── test_investigations.py    # Phase 4A investigation tests (17 tests)
 ```
 
 ---
@@ -115,6 +120,7 @@ The backend is built with **FastAPI** (`backend/main.py`), running under **Uvico
   - Detection results (`/alerts`, `/alerts/{alert_id}`, `/detection/summary`)
   - Wallet analytics (`/wallets/{wallet_id}/risk`, `/wallets/{wallet_id}/alerts`, `/wallets/{wallet_id}/transactions`)
   - Topological exploration (`/graph/{wallet_id}`)
+  - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`)
 
 ---
 
@@ -164,6 +170,18 @@ The detection architecture (`backend/detection/`) separates concerns across spec
    - Extracts $k$-hop subgraphs via `get_wallet_graph()` for graph rendering.
 
 ---
+
+## Investigation Workflow Layer (Phase 4A)
+
+The investigation workflow provides analyst case management on top of the detection engine:
+
+1. **`models.py` (`backend/investigations/models.py`)**:
+   - `InvestigationCase`: Domain dataclass holding `case_id`, `title`, `target_wallet`, `status` (`OPEN` / `CLOSED`), `notes`, `alert_ids`, `related_wallets`, and UTC timestamps (`created_at`, `updated_at`).
+   - `generate_case_id()`: Creates deterministic, collision-resistant case IDs (`CASE-<8 hex chars>`) using target wallet, timestamp, and entropy.
+2. **`store.py` (`backend/investigations/store.py`)**:
+   - `InvestigationCaseStore`: In-memory repository with thread-safe dictionary lookup and automatic JSON file persistence (`cases.json`). Survives process restarts while avoiding database configuration complexity for the MVP.
+   - Singleton instance `CASE_STORE` shared across API route handlers.
+
 
 ## Risk Model
 
