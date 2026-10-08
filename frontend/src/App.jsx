@@ -143,17 +143,17 @@ export default function App() {
       {/* Top Cybersecurity Navbar */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-indigo-500/20 to-cyan-500/10 border border-indigo-500/30 rounded-xl text-indigo-400 shadow-inner">
+          <div className="p-2 bg-gradient-to-br from-indigo-500/20 to-cyan-500/10 border border-indigo-500/30 rounded-xl text-indigo-400 shadow-inner glow-indigo">
             <Shield className="w-5 h-5 text-indigo-400" />
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-wider text-white flex items-center gap-2">
               CHAIN<span className="text-indigo-400">SENTINEL</span>
-              <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-300 px-2 py-0.5 rounded border border-indigo-700/60 font-bold">
-                Platform Phase 8
+              <span className="text-[10px] font-mono uppercase bg-indigo-950/90 text-indigo-300 px-2.5 py-0.5 rounded-full border border-indigo-500/50 font-bold tracking-wide">
+                Phase 9 • Hackathon Ready
               </span>
             </h1>
-            <p className="text-[11px] text-slate-400">Blockchain Forensic Intelligence & Investigation Cockpit</p>
+            <p className="text-[11px] text-slate-400">Autonomous Forensic Intelligence &amp; Cryptographic Audit Cockpit</p>
           </div>
         </div>
 
@@ -164,7 +164,7 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')}
             className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
               activeTab === 'dashboard'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-indigo-600 text-white shadow-sm font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
             }`}
           >
@@ -179,7 +179,7 @@ export default function App() {
             }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
               activeTab === 'alerts'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-indigo-600 text-white shadow-sm font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
             }`}
           >
@@ -191,7 +191,7 @@ export default function App() {
             onClick={() => setActiveTab('investigate')}
             className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
               activeTab === 'investigate'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-indigo-600 text-white shadow-sm font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
             }`}
           >
@@ -203,7 +203,7 @@ export default function App() {
             onClick={() => setActiveTab('flow')}
             className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
               activeTab === 'flow'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-indigo-600 text-white shadow-sm font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
             }`}
           >
@@ -215,7 +215,7 @@ export default function App() {
             onClick={() => setActiveTab('cases')}
             className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
               activeTab === 'cases'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-indigo-600 text-white shadow-sm font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
             }`}
           >
@@ -275,6 +275,52 @@ export default function App() {
         </div>
       )}
 
+      {/* Forensic Investigation Workflow Pipeline Bar */}
+      <div className="bg-slate-900/40 border-b border-slate-800/80 px-6 py-2.5 flex items-center justify-between text-xs font-mono overflow-x-auto">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">Forensic Lifecycle</span>
+          <span className="text-slate-700">&bull;</span>
+        </div>
+
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+          {[
+            { id: 'alerts', label: '1. Alert Triage', count: alerts.length },
+            { id: 'investigate', label: '2. Wallet Deep Dive', count: null },
+            { id: 'flow', label: '3. Flow Tracer', count: null },
+            { id: 'cases', label: '4. Case Dossier & Cryptographic Audit', count: investigationsCount },
+          ].map((stage, idx, arr) => (
+            <div key={stage.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab(stage.id)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                  activeTab === stage.id
+                    ? 'bg-indigo-600/30 text-indigo-200 border border-indigo-500/50 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+                }`}
+              >
+                <span>{stage.label}</span>
+                {stage.count !== null && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">
+                    {stage.count}
+                  </span>
+                )}
+              </button>
+              {idx < arr.length - 1 && (
+                <span className="text-slate-600 text-[10px]">&rarr;</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden xl:flex items-center gap-2 text-[11px] text-slate-400 shrink-0">
+          <span className="text-slate-500">Active Focus:</span>
+          <span className="text-indigo-300 font-bold truncate max-w-[140px]" title={investigationTargetWallet}>
+            {investigationTargetWallet ? `${investigationTargetWallet.slice(0, 8)}...${investigationTargetWallet.slice(-4)}` : 'None'}
+          </span>
+        </div>
+      </div>
+
       {/* Main Container */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-6 space-y-6">
         {/* Full Loading Skeleton */}
@@ -308,6 +354,7 @@ export default function App() {
                 initialPatternFilter={activePatternFilter}
                 onSelectAlert={(al) => setSelectedAlert(al)}
                 onInvestigateWallet={handleInvestigateWallet}
+                onTraceFlow={handleTraceFlow}
               />
             )}
 
@@ -378,7 +425,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 px-6 py-4 text-center text-xs text-slate-500 font-mono">
-        ChainSentinel &bull; Blockchain Forensic Investigation Platform &bull; Phase 7 Complete
+        ChainSentinel &bull; Autonomous Blockchain Forensic Platform &bull; Phase 9 Verified &bull; Hackathon Demo Ready
       </footer>
     </div>
   );

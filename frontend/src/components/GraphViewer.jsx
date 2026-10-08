@@ -52,7 +52,7 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
         {
           selector: 'node',
           style: {
-            'background-color': '#475569',
+            'background-color': '#334155',
             'label': 'data(label)',
             'color': '#cbd5e1',
             'font-size': '10px',
@@ -62,7 +62,7 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
             'width': hasPathHighlight ? 26 : 30,
             'height': hasPathHighlight ? 26 : 30,
             'border-width': 1.5,
-            'border-color': '#334155',
+            'border-color': '#475569',
             'opacity': hasPathHighlight ? 0.35 : 1.0,
           },
         },
@@ -71,8 +71,9 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
           style: {
             'background-color': '#e11d48',
             'border-color': '#fb7185',
-            'border-width': 2,
+            'border-width': 2.5,
             'color': '#fecdd3',
+            'font-weight': 'bold',
           },
         },
         {
@@ -81,11 +82,12 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
             'background-color': '#0284c7',
             'border-color': '#38bdf8',
             'border-width': 3.5,
-            'width': 38,
-            'height': 38,
+            'width': 40,
+            'height': 40,
             'color': '#ffffff',
             'font-weight': 'bold',
             'opacity': 1.0,
+            'z-index': 80,
           },
         },
         {
@@ -134,7 +136,7 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
           selector: 'node[?is_target]',
           style: {
             'background-color': '#7c3aed',
-            'border-color': '#a78bfa',
+            'border-color': '#c084fc',
             'border-width': 4,
             'width': 42,
             'height': 42,
@@ -182,7 +184,7 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
           selector: 'node:selected',
           style: {
             'border-color': '#f59e0b',
-            'border-width': 3,
+            'border-width': 3.5,
           },
         },
       ],
@@ -200,6 +202,11 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
     if (onNodeClick) {
       cy.on('tap', 'node', (evt) => {
         const nodeData = evt.target.data();
+        cy.animate({
+          center: { eles: evt.target },
+          duration: 350,
+          easing: 'ease-out-cubic',
+        });
         onNodeClick(nodeData.id);
       });
     }
@@ -214,9 +221,32 @@ export default function GraphViewer({ graphData, onNodeClick, height = '450px' }
     };
   }, [graphData, onNodeClick]);
 
-  const handleZoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.25);
-  const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() * 0.8);
-  const handleReset = () => cyRef.current?.fit(null, 30);
+  const handleZoomIn = () => {
+    if (!cyRef.current) return;
+    cyRef.current.animate({
+      zoom: cyRef.current.zoom() * 1.3,
+      duration: 250,
+      easing: 'ease-out-cubic',
+    });
+  };
+
+  const handleZoomOut = () => {
+    if (!cyRef.current) return;
+    cyRef.current.animate({
+      zoom: cyRef.current.zoom() * 0.75,
+      duration: 250,
+      easing: 'ease-out-cubic',
+    });
+  };
+
+  const handleReset = () => {
+    if (!cyRef.current) return;
+    cyRef.current.animate({
+      fit: { padding: 30 },
+      duration: 400,
+      easing: 'ease-out-cubic',
+    });
+  };
 
   if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
     return (

@@ -129,7 +129,7 @@ export default function DashboardView({
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-slate-900/60 border border-slate-800 hover:border-slate-700 rounded-xl p-4.5 space-y-1 transition-all">
+        <div className="glass-card rounded-xl p-4.5 space-y-1">
           <div className="text-xs font-mono uppercase text-slate-400 flex items-center justify-between">
             <span>Total Alerts</span>
             <AlertTriangle className="w-4 h-4 text-indigo-400" />
@@ -142,10 +142,10 @@ export default function DashboardView({
           </p>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 hover:border-purple-900/50 rounded-xl p-4.5 space-y-1 transition-all">
+        <div className="glass-card rounded-xl p-4.5 space-y-1 hover:border-purple-500/50">
           <div className="text-xs font-mono uppercase text-purple-400 flex items-center justify-between">
             <span>Critical Priority</span>
-            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse glow-critical" />
           </div>
           <div className="text-3xl font-bold text-purple-400 font-mono tracking-tight">
             {intelSummary?.priority_breakdown?.CRITICAL || 0}
@@ -153,7 +153,7 @@ export default function DashboardView({
           <p className="text-[11px] text-slate-500">Immediate investigation targets</p>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 hover:border-rose-900/50 rounded-xl p-4.5 space-y-1 transition-all">
+        <div className="glass-card rounded-xl p-4.5 space-y-1 hover:border-rose-500/50">
           <div className="text-xs font-mono uppercase text-rose-400 flex items-center justify-between">
             <span>Cross-Correlations</span>
             <GitMerge className="w-4 h-4 text-rose-400" />
@@ -164,10 +164,10 @@ export default function DashboardView({
           <p className="text-[11px] text-slate-500">Multi-pattern convergence events</p>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 hover:border-emerald-900/50 rounded-xl p-4.5 space-y-1 transition-all">
+        <div className="glass-card rounded-xl p-4.5 space-y-1 hover:border-emerald-500/50">
           <div className="text-xs font-mono uppercase text-emerald-400 flex items-center justify-between">
             <span>Normal Baseline</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 glow-emerald" />
           </div>
           <div className="text-3xl font-bold text-emerald-400 font-mono tracking-tight">
             {intelSummary?.classification_breakdown?.NORMAL || 0}
@@ -339,7 +339,7 @@ export default function DashboardView({
               </button>
               <button
                 type="button"
-                onClick={() => onNavigateTab('investigations')}
+                onClick={() => onNavigateTab('cases')}
                 className="px-2.5 py-1 rounded bg-indigo-950/70 border border-indigo-800/80 text-indigo-300 hover:text-white transition-colors flex items-center gap-1"
               >
                 <FolderLock className="w-3 h-3" /> Open Cases

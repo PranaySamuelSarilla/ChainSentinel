@@ -6,7 +6,8 @@ import {
   Wallet,
   ArrowUpRight,
   Eye,
-  X
+  X,
+  Compass
 } from 'lucide-react';
 
 const PATTERNS = [
@@ -23,6 +24,7 @@ export default function AlertsView({
   alerts,
   onSelectAlert,
   onInvestigateWallet,
+  onTraceFlow,
   initialPatternFilter = 'ALL'
 }) {
   const [severityFilter, setSeverityFilter] = useState('ALL');
@@ -196,72 +198,97 @@ export default function AlertsView({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredAndSortedAlerts.map((alert) => (
-            <div
-              key={alert.alert_id}
-              onClick={() => onSelectAlert(alert)}
-              className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500/60 rounded-xl p-4.5 cursor-pointer transition-all hover:bg-slate-900/90 flex flex-col justify-between group space-y-3"
-            >
-              <div className="space-y-2">
-                {/* Header row */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-bold shrink-0 ${getSeverityBadge(alert.severity)}`}>
-                      {alert.severity}
-                    </span>
-                    <span className="text-xs font-mono font-bold text-white truncate group-hover:text-indigo-300 transition-colors">
-                      {alert.pattern}
+          {filteredAndSortedAlerts.map((alert) => {
+            const isCritical = alert.severity === 'CRITICAL';
+            const isHigh = alert.severity === 'HIGH';
+            const cardBorderClass = isCritical
+              ? 'border-purple-600/70 glow-critical'
+              : isHigh
+              ? 'border-rose-600/60 glow-high'
+              : 'border-slate-800/80';
+
+            return (
+              <div
+                key={alert.alert_id}
+                onClick={() => onSelectAlert(alert)}
+                className={`glass-card rounded-xl p-4.5 cursor-pointer transition-all flex flex-col justify-between group space-y-3 ${cardBorderClass}`}
+              >
+                <div className="space-y-2">
+                  {/* Header row */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-bold shrink-0 ${getSeverityBadge(alert.severity)}`}>
+                        {alert.severity}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-white truncate group-hover:text-indigo-300 transition-colors">
+                        {alert.pattern}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-indigo-300 font-bold shrink-0">
+                      {alert.total_amount ? `${alert.total_amount.toFixed(2)} ETH` : 'N/A'}
                     </span>
                   </div>
-                  <span className="text-[11px] font-mono text-indigo-300 font-bold shrink-0">
-                    {alert.total_amount ? `${alert.total_amount.toFixed(2)} ETH` : 'N/A'}
-                  </span>
+
+                  {/* Explanation */}
+                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                    {alert.explanation}
+                  </p>
+
+                  {/* Wallets Snippet */}
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 pt-1">
+                    <Wallet className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span className="truncate">
+                      Origin: <span className="text-slate-300">{alert.wallets?.[0]?.slice(0, 10)}...</span>
+                    </span>
+                    <span>&bull;</span>
+                    <span className="shrink-0">{alert.wallets?.length} wallets</span>
+                  </div>
                 </div>
 
-                {/* Explanation */}
-                <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                  {alert.explanation}
-                </p>
-
-                {/* Wallets Snippet */}
-                <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 pt-1">
-                  <Wallet className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">
-                    Origin: <span className="text-slate-300">{alert.wallets?.[0]?.slice(0, 10)}...</span>
-                  </span>
-                  <span>&bull;</span>
-                  <span className="shrink-0">{alert.wallets?.length} wallets</span>
+                {/* Bottom bar with action buttons */}
+                <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
+                  <span className="text-[10px] text-slate-500">#{alert.alert_id}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectAlert(alert);
+                      }}
+                      className="px-2 py-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      <Eye className="w-3 h-3" /> Inspect
+                    </button>
+                    {onTraceFlow && alert.wallets?.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const src = alert.wallets[0];
+                          const tgt = alert.wallets.length > 1 ? alert.wallets[alert.wallets.length - 1] : '';
+                          onTraceFlow(src, tgt);
+                        }}
+                        className="px-2 py-1 text-[11px] font-medium text-sky-300 hover:text-white bg-sky-950/70 hover:bg-sky-900 border border-sky-800/80 rounded-lg transition-colors flex items-center gap-1"
+                        title="Trace Fund Flow"
+                      >
+                        <Compass className="w-3 h-3 text-sky-400" /> Flow
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInvestigateWallet(alert.wallets?.[0]);
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-medium text-indigo-300 hover:text-white bg-indigo-950/70 hover:bg-indigo-600 border border-indigo-800/80 rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      Investigate <ArrowUpRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {/* Bottom bar with action buttons */}
-              <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
-                <span className="text-[10px] text-slate-500">#{alert.alert_id}</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectAlert(alert);
-                    }}
-                    className="px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors flex items-center gap-1"
-                  >
-                    <Eye className="w-3 h-3" /> Inspect
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onInvestigateWallet(alert.wallets?.[0]);
-                    }}
-                    className="px-2.5 py-1 text-[11px] font-medium text-indigo-300 hover:text-white bg-indigo-950/70 hover:bg-indigo-600 border border-indigo-800/80 rounded-lg transition-colors flex items-center gap-1"
-                  >
-                    Investigate <ArrowUpRight className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
