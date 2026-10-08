@@ -1,8 +1,8 @@
 """
-ChainSentinel - Phase 4A & 4B-1 Investigation Workflow Tests
+ChainSentinel - Phase 4 Investigation Workflow Tests (4A, 4B-1, 4B-2)
 
 Tests case creation, retrieval, listing, status updates, note edits,
-persistence, validation errors, 404 responses, and aggregated case summaries.
+persistence, validation errors, 404 responses, aggregated case summaries, and case graphs.
 
 Run with:
     pytest backend/tests/test_investigations.py -v
@@ -394,3 +394,123 @@ def test_investigation_summary_multiple_related_wallets(client):
         assert data["related_wallet_risks"][w]["wallet_id"] == w
         assert "risk_score" in data["related_wallet_risks"][w]
         assert "risk_level" in data["related_wallet_risks"][w]
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 4B-2: Graph Endpoint Tests
+# ──────────────────────────────────────────────────────────────────
+
+def test_investigation_graph_success(client):
+    """GET /investigations/{case_id}/graph returns Cytoscape-formatted graph centered on target_wallet."""
+    target_wallet = DATASET[0]["from_wallet"]
+    create_res = client.post("/investigations", json={
+        "title": "Graph Retrieval Test",
+        "target_wallet": target_wallet,
+    })
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    res = client.get(f"/investigations/{case_id}/graph")
+    assert res.status_code == 200
+    data = res.json()
+
+    # Check case identifiers
+    assert data["case_id"] == case_id
+    assert data["target_wallet"] == target_wallet
+    assert data["wallet_id"] == target_wallet
+
+    # Check Cytoscape structures
+    assert "nodes" in data
+    assert "edges" in data
+    assert "flagged_wallets" in data
+    assert len(data["nodes"]) > 0
+
+    # Verify focus node exists and is marked
+    focus_nodes = [
+        n for n in data["nodes"]
+        if n["data"]["id"] == target_wallet and n["data"]["is_focus"] is True
+    ]
+    assert len(focus_nodes) == 1
+
+    # Verify node schema
+    for node in data["nodes"]:
+        assert "id" in node["data"]
+        assert "label" in node["data"]
+        assert "flagged" in node["data"]
+        assert "is_focus" in node["data"]
+
+    # Verify edge schema if edges present
+    for edge in data["edges"]:
+        assert "id" in edge["data"]
+        assert "source" in edge["data"]
+        assert "target" in edge["data"]
+        assert "amount" in edge["data"]
+        assert "label" in edge["data"]
+
+
+def test_investigation_graph_depth_parameter(client):
+    """GET /investigations/{case_id}/graph respects depth query parameter."""
+    # Pick a circular wallet that has multi-hop neighbors
+    circular_txs = [t for t in DATASET if t["category_label"] == "circular"]
+    target_wallet = circular_txs[0]["from_wallet"]
+
+    create_res = client.post("/investigations", json={
+        "title": "Depth Test Case",
+        "target_wallet": target_wallet,
+    })
+    case_id = create_res.json()["case_id"]
+
+    res_d1 = client.get(f"/investigations/{case_id}/graph?depth=1")
+    assert res_d1.status_code == 200
+    nodes_d1 = res_d1.json()["nodes"]
+
+    res_d2 = client.get(f"/investigations/{case_id}/graph?depth=2")
+    assert res_d2.status_code == 200
+    nodes_d2 = res_d2.json()["nodes"]
+
+    assert len(nodes_d2) >= len(nodes_d1)
+
+
+def test_investigation_graph_not_found(client):
+    """GET /investigations/{case_id}/graph returns 404 for nonexistent case."""
+    res = client.get("/investigations/CASE-nonexistent-123/graph")
+    assert res.status_code == 404
+    assert "not found" in res.json()["detail"].lower()
+
+
+def test_investigation_graph_target_wallet_with_no_data(client):
+    """GET /investigations/{case_id}/graph returns isolated focus node when wallet has no transactions."""
+    create_res = client.post("/investigations", json={
+        "title": "Isolated Wallet Graph",
+        "target_wallet": "0xIsolatedWalletNoData999",
+    })
+    case_id = create_res.json()["case_id"]
+
+    res = client.get(f"/investigations/{case_id}/graph")
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["target_wallet"] == "0xIsolatedWalletNoData999"
+    assert len(data["nodes"]) == 1
+    assert data["nodes"][0]["data"]["id"] == "0xIsolatedWalletNoData999"
+    assert data["nodes"][0]["data"]["is_focus"] is True
+    assert data["edges"] == []
+    assert data["flagged_wallets"] == []
+
+
+def test_investigation_graph_invalid_depth(client):
+    """GET /investigations/{case_id}/graph validates depth bounds (ge=1, le=3)."""
+    create_res = client.post("/investigations", json={
+        "title": "Invalid Depth Case",
+        "target_wallet": DATASET[0]["from_wallet"],
+    })
+    case_id = create_res.json()["case_id"]
+
+    # depth < 1 -> 422
+    res_low = client.get(f"/investigations/{case_id}/graph?depth=0")
+    assert res_low.status_code == 422
+
+    # depth > 3 -> 422
+    res_high = client.get(f"/investigations/{case_id}/graph?depth=4")
+    assert res_high.status_code == 422
+

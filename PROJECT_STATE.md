@@ -6,20 +6,27 @@
 - **Phase 2 — Synthetic Transaction Dataset & Basic APIs**: COMPLETE
 - **Phase 3 — Rule-Based Detection Engine**: COMPLETE
 - **Phase 4A — Investigation Case Model, Storage & Core APIs**: COMPLETE
-- **Phase 4B-1 — Investigation Case Summary Aggregation API**: COMPLETE
+- **Phase 4B — Summary & Graph APIs + Frontend Data Integration**: COMPLETE
+- **Phase 4C — Dashboard & Alert Experience Refinement**: COMPLETE
+- **Phase 4D — Wallet Investigation & Case Workflow UI**: COMPLETE
+- **Phase 4E — Testing, Verification & Checkpoint**: COMPLETE
 
-**Current Next Sub-Phase**: **Phase 4B-2 — Investigation flow tracing, graph integration, and remaining Phase 4 capabilities**
+**Current Next Phase**: **Phase 5 — Advanced Cybersecurity Visualizations & Activity Charts**
 
 ---
 
 ## Completed Features
 
-- **React + Vite Frontend (`frontend/`)**: React 19, Vite 8, Tailwind CSS v4, Lucide React icons, Cytoscape.js installed. Development server with backend API proxy (`/api` → `http://127.0.0.1:8000`), live backend health monitoring pill indicator, cyber-styled UI shell.
+- **React + Vite Frontend (`frontend/`)**: React 19, Vite 8, Tailwind CSS v4, Lucide React icons, Cytoscape.js installed. Development server with backend API proxy (`/api` → `http://127.0.0.1:8000`) and direct fallback. Full frontend API client layer (`frontend/src/api/`) communicating with all backend endpoints. Complete forensic investigation platform across 4 coordinated views:
+  - **Dashboard View (`DashboardView.jsx`)**: Cybersecurity command center with live KPI metric strip (21 alerts, 11 high/critical, 9 medium, 1 low), interactive pattern breakdown matrix (6 cards with click-to-filter), top threats feed, and quick forensic jumps.
+  - **Alerts Explorer (`AlertsView.jsx` & `AlertDetailModal.jsx`)**: Multi-filter alerts explorer with severity filters (`ALL`, `HIGH`, `MEDIUM`, `LOW`), pattern dropdown, real-time search, sorting by severity/amount/time, and full forensic modal with implicated wallet roles, transaction hashes, and direct "Investigate Wallet" / "Open Case" action buttons.
+  - **Wallet Deep Dive (`WalletInvestigationView.jsx`)**: Address search with scenario presets, deterministic risk gauge (0–100) with color-coded levels, contributing pattern breakdown, interactive Cytoscape neighborhood graph with 1–3 hop depth selector, and full inbound/outbound transaction ledger.
+  - **Case Management Workspace (`InvestigationsView.jsx` & `CreateCaseModal.jsx`)**: Complete investigation case workflow with status filtering (`ALL`, `OPEN`, `CLOSED`), comprehensive case dossier (`GET /investigations/{case_id}/summary`), embedded case graph visualization (`GET /investigations/{case_id}/graph`), inline editable analyst notes (`PATCH /notes`), and one-click case status toggle (`PATCH /status`).
 - **FastAPI Backend (`backend/main.py`)**: Asynchronous REST service with CORS enabled for local development, in-memory pre-warmed detection cache, full endpoints for transactions, alerts, risk scores, graphs, and investigation cases.
 - **Investigation Workflow Backend (`backend/investigations/`)**:
   - `InvestigationCase` domain model (`case_id`, `title`, `target_wallet`, `status`, `notes`, `alert_ids`, `related_wallets`, timestamps)
   - `InvestigationCaseStore` singleton (`CASE_STORE`) providing in-memory lookup and JSON file persistence (`cases.json`)
-  - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`), and comprehensive aggregated case summary (`GET /investigations/{case_id}/summary`)
+  - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`), comprehensive aggregated case summary (`GET /investigations/{case_id}/summary`), and investigation graph visualization (`GET /investigations/{case_id}/graph`)
 - **Synthetic Transaction Dataset (`backend/data/transactions.csv`)**: 70 transactions across 70 wallets totaling 1,200.45 ETH, containing deliberate examples of 6 suspicious topologies and 4 normal activity patterns.
 - **Transaction Loader (`backend/data/loader.py`)**: High-performance dataset loader using Python standard library `csv` and typed records, returning summary metrics without external binary dependencies.
 - **Transaction APIs**: `GET /transactions` (with pagination and filtering by category or wallet) and `GET /transactions/{tx_id}`.
@@ -37,7 +44,7 @@
 - **Wallet Transactions**: `GET /wallets/{wallet_id}/transactions` returning all inbound and outbound transactions for a wallet.
 - **Graph API**: `GET /graph/{wallet_id}?depth=2` returning Cytoscape-formatted nodes and directed edges with flagging metadata.
 - **Detection Summary API**: `GET /detection/summary` returning global alert counts, breakdown by pattern, and breakdown by severity.
-- **Automated Tests (`backend/tests/`)**: 85 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, and the complete investigation workflow with summary aggregation (100% passing).
+- **Automated Tests (`backend/tests/`)**: 90 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, and the complete investigation workflow with summary aggregation and case graphs (100% passing).
 
 ---
 
@@ -142,6 +149,7 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `PATCH` | `/investigations/{case_id}/status` | Body: `status` (`OPEN` or `CLOSED`) | Update investigation case status; returns updated case object |
 | `PATCH` | `/investigations/{case_id}/notes` | Body: `notes` (string) | Update investigation case notes; returns updated case object |
 | `GET` | `/investigations/{case_id}/summary` | `case_id` (string) | Comprehensive forensic investigation summary (case, target risk, resolved alerts, transactions, related risks) |
+| `GET` | `/investigations/{case_id}/graph` | `case_id` (string), `depth` (1-3, default 2) | Cytoscape graph data centered on case target wallet (reusing Phase 3 graph engine) |
 
 ---
 
@@ -160,7 +168,7 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 
 ## Current Phase
 
-- **Current Status**: **Phase 4B-1 Complete** (Investigation Case Summary Aggregation API)
-- **Next Task**: **Phase 4B-2 — Investigation Flow Tracing, Graph Integration & Remaining Phase 4 Capabilities**
+- **Current Status**: **Phase 4 Complete** (Phase 4A: Models & Store, Phase 4B: Summary/Graph APIs & Frontend Integration, Phase 4C: Dashboard & Alerts, Phase 4D: Wallet Deep Dive & Case Management, Phase 4E: Testing, Verification & Checkpoint)
+- **Next Task**: **Phase 5 — Advanced Cybersecurity Visualizations & Activity Charts**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.

@@ -1,0 +1,198 @@
+import { useEffect, useRef } from 'react';
+import cytoscape from 'cytoscape';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+
+export default function GraphViewer({ graphData, onNodeClick, height = '450px' }) {
+  const containerRef = useRef(null);
+  const cyRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !graphData || !graphData.nodes) return;
+
+    // Destroy any existing instance
+    if (cyRef.current) {
+      cyRef.current.destroy();
+      cyRef.current = null;
+    }
+
+    const elements = [
+      ...graphData.nodes.map(n => ({
+        group: 'nodes',
+        data: {
+          id: n.data.id,
+          label: n.data.label || `${n.data.id.slice(0, 8)}...`,
+          flagged: Boolean(n.data.flagged),
+          is_focus: Boolean(n.data.is_focus),
+        },
+      })),
+      ...(graphData.edges || []).map(e => ({
+        group: 'edges',
+        data: {
+          id: e.data.id,
+          source: e.data.source,
+          target: e.data.target,
+          label: e.data.label || `${e.data.amount} ETH`,
+          category: e.data.category || '',
+        },
+      })),
+    ];
+
+    const cy = cytoscape({
+      container: containerRef.current,
+      elements,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': '#475569',
+            'label': 'data(label)',
+            'color': '#cbd5e1',
+            'font-size': '10px',
+            'font-family': 'monospace',
+            'text-valign': 'bottom',
+            'text-margin-y': 5,
+            'width': 30,
+            'height': 30,
+            'border-width': 1.5,
+            'border-color': '#334155',
+          },
+        },
+        {
+          selector: 'node[?flagged]',
+          style: {
+            'background-color': '#e11d48',
+            'border-color': '#fb7185',
+            'border-width': 2,
+            'color': '#fecdd3',
+          },
+        },
+        {
+          selector: 'node[?is_focus]',
+          style: {
+            'background-color': '#0284c7',
+            'border-color': '#38bdf8',
+            'border-width': 3.5,
+            'width': 38,
+            'height': 38,
+            'color': '#ffffff',
+            'font-weight': 'bold',
+          },
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 1.5,
+            'line-color': '#475569',
+            'target-arrow-color': '#475569',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'label': 'data(label)',
+            'font-size': '8px',
+            'font-family': 'monospace',
+            'color': '#94a3b8',
+            'text-rotation': 'autorotate',
+            'text-margin-y': -8,
+            'arrow-scale': 0.8,
+          },
+        },
+        {
+          selector: 'node:selected',
+          style: {
+            'border-color': '#f59e0b',
+            'border-width': 3,
+          },
+        },
+      ],
+      layout: {
+        name: 'cose',
+        animate: false,
+        randomize: false,
+        componentSpacing: 60,
+        nodeRepulsion: 450000,
+        edgeElasticity: 100,
+        padding: 30,
+      },
+    });
+
+    if (onNodeClick) {
+      cy.on('tap', 'node', (evt) => {
+        const nodeData = evt.target.data();
+        onNodeClick(nodeData.id);
+      });
+    }
+
+    cyRef.current = cy;
+
+    return () => {
+      if (cyRef.current) {
+        cyRef.current.destroy();
+        cyRef.current = null;
+      }
+    };
+  }, [graphData, onNodeClick]);
+
+  const handleZoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.25);
+  const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() * 0.8);
+  const handleReset = () => cyRef.current?.fit(null, 30);
+
+  if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
+    return (
+      <div
+        className="flex items-center justify-center border border-slate-800 rounded-xl bg-slate-950/60 text-slate-500 text-sm font-mono"
+        style={{ height }}
+      >
+        No graph nodes available for this selection.
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative border border-slate-800 rounded-xl overflow-hidden bg-slate-950/80">
+      {/* Controls Overlay */}
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 rounded-lg p-1 backdrop-blur shadow-md">
+        <button
+          type="button"
+          onClick={handleZoomIn}
+          title="Zoom In"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={handleZoomOut}
+          title="Zoom Out"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={handleReset}
+          title="Reset View"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Graph Legend */}
+      <div className="absolute bottom-3 left-3 z-10 flex items-center gap-3 bg-slate-900/90 border border-slate-800/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-400 backdrop-blur">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-sky-500 border border-sky-300" />
+          <span>Focus Wallet</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-600 border border-rose-400" />
+          <span>Flagged Suspicious</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-600 border border-slate-400" />
+          <span>Counterparty</span>
+        </div>
+      </div>
+
+      <div ref={containerRef} style={{ width: '100%', height }} />
+    </div>
+  );
+}

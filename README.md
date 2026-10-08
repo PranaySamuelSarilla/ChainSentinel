@@ -147,7 +147,7 @@ All 7 test cases verify:
 - [x] **Phase 1**: Project Structure & Tooling (React + Vite + Tailwind, Python + FastAPI)
 - [x] **Phase 2**: Synthetic Transaction Dataset (7 topologies, CSV loader, summary analytics)
 - [x] **Phase 3**: Rule-Based Detection Engine (Circular, Rapid, Burst, Split, Recomb, Cluster algorithms)
-- [ ] **Phase 4**: Forensic FastAPI Endpoints (`/alerts`, `/graph/{wallet_id}`, `/wallets/{wallet_id}`)
+- [x] **Phase 4**: Forensic Investigation Platform & UI Workflows (Case model, summary/graph APIs, forensic dashboard, alerts explorer, wallet deep-dive, case dossiers)
 - [ ] **Phase 5**: React Cybersecurity Dashboard & Activity Charts
 - [ ] **Phase 6**: Cytoscape.js Interactive Wallet Graph Visualization
 - [ ] **Phase 7**: Investigation Workflow & Flow Tracer

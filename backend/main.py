@@ -28,6 +28,9 @@ Endpoints:
 
   Phase 4B-1 (investigation summary):
     GET  /investigations/{case_id}/summary
+
+  Phase 4B-2 (investigation graph):
+    GET  /investigations/{case_id}/graph
 """
 
 from datetime import datetime, timezone
@@ -402,3 +405,25 @@ def get_investigation_summary(case_id: str):
         "wallet_transactions": wallet_txs,
         "related_wallet_risks": related_risks,
     }
+
+
+@app.get("/investigations/{case_id}/graph")
+def get_investigation_graph(
+    case_id: str,
+    depth: int = Query(2, ge=1, le=3, description="Hop depth for graph expansion"),
+):
+    """
+    Return Cytoscape-compatible graph data (nodes + edges) for an investigation case,
+    centered around the case's target_wallet up to `depth` hops.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    graph_data = ENGINE.get_wallet_graph(case.target_wallet, depth=depth)
+    return {
+        "case_id": case.case_id,
+        "target_wallet": case.target_wallet,
+        **graph_data,
+    }
+

@@ -57,8 +57,19 @@ ChainSentinel/
 │   ├── index.html                    # Single-page application root HTML
 │   ├── src/
 │   │   ├── main.jsx                  # React application entry point
-│   │   ├── App.jsx                   # Dark cybersecurity shell and status indicator
-│   │   └── index.css                 # Tailwind v4 import and custom dark styling
+│   │   ├── App.jsx                   # Dark cybersecurity cockpit, tabs, and live data integration
+│   │   ├── index.css                 # Tailwind v4 import and custom dark styling
+│   │   ├── api/                      # Frontend API client layer (Phase 4B)
+│   │   │   ├── client.js             # Universal fetch wrapper with direct/proxy fallback
+│   │   │   └── index.js              # Re-exports for components
+│   │   └── components/
+│   │       ├── AlertDetailModal.jsx         # Full forensic alert drill-down & evidence modal
+│   │       ├── AlertsView.jsx               # Interactive alerts explorer with search, severity & pattern filters
+│   │       ├── CreateCaseModal.jsx          # Modal for launching investigation cases
+│   │       ├── DashboardView.jsx            # Cybersecurity command center with KPI metrics and pattern cards
+│   │       ├── GraphViewer.jsx              # Cytoscape.js canvas component with controls & focus glow
+│   │       ├── InvestigationsView.jsx       # Case management workspace with summary dossiers & notes
+│   │       └── WalletInvestigationView.jsx  # Wallet deep-dive with risk gauge, graph & transaction ledger
 │   └── dist/                         # Verified production bundle build
 └── backend/                          # Forensics analytics backend
     ├── requirements.txt              # Backend dependencies (fastapi, uvicorn, networkx, etc.)
@@ -82,7 +93,7 @@ ChainSentinel/
     │   ├── clusters.py               # Dense subgraph / community detector
     │   ├── risk.py                   # Additive risk scoring engine
     │   └── engine.py                 # DetectionEngine orchestrator and graph extractor
-    ├── investigations/               # Investigation case workflow (Phase 4A & Phase 4B-1)
+    ├── investigations/               # Investigation case workflow (Phase 4)
     │   ├── __init__.py               # Package exports
     │   ├── models.py                 # InvestigationCase domain model & case ID generator
     │   └── store.py                  # In-memory case repository with JSON persistence
@@ -92,7 +103,7 @@ ChainSentinel/
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
         ├── test_detection.py         # Phase 3 detection tests (56 tests)
-        └── test_investigations.py    # Phase 4A/4B-1 investigation tests (22 tests)
+        └── test_investigations.py    # Phase 4 investigation tests (27 tests)
 ```
 
 ---
@@ -102,9 +113,57 @@ ChainSentinel/
 The frontend is an investigation cockpit built with:
 - **Framework**: React 19 bootstrapped with Vite 8.
 - **Styling**: Tailwind CSS v4 using a dark cybersecurity theme (`#0b0f19` background, slate cards, and neon severity badges).
-- **Graph Renderer**: Cytoscape.js (`cytoscape@^3.34.3`) prepared for interactive node-link network rendering.
+- **API Client Layer (`frontend/src/api/client.js`)**: Universal API client providing clean async methods for all backend endpoints (`getHealth`, `getDatasetInfo`, `getDetectionSummary`, `getAlerts`, `getAlertById`, `getWalletRisk`, `getWalletTransactions`, `getWalletGraph`, `getInvestigations`, `getInvestigationSummary`, `getInvestigationGraph`). Handles automatic relative Vite proxy `/api` routing with graceful direct fallback to `http://127.0.0.1:8000`.
+- **Interactive Graph Component (`frontend/src/components/GraphViewer.jsx`)**: Cytoscape.js canvas (`cytoscape@^3.34.3`) rendering live backend nodes and directed edges, with focus node highlight, flagged suspect coloring, transaction amounts, zoom/pan controls, and configurable hop depth traversal.
 - **Iconography**: Lucide React (`lucide-react@^1.53.0`) for cybersecurity and system status indicators.
-- **Proxying**: Configured in `vite.config.js` to route all `/api/*` requests directly to `http://127.0.0.1:8000`, eliminating CORS obstacles during local development.
+- **Proxying & CORS**: Configured in `vite.config.js` to route all `/api/*` requests directly to `http://127.0.0.1:8000`, with backend CORS enabled for all origins.
+- **Frontend Data Flow**:
+  `React UI (App.jsx) <──► API Layer (api/client.js) <──► Vite Proxy / CORS <──► FastAPI Backend (:8000) <──► Detection Engine / Case Store`
+
+### Frontend Component Architecture
+
+1. **Root Navigation Shell (`frontend/src/App.jsx`)**:
+   - Manages top-level navigation across 4 primary tabs: **Dashboard**, **Alerts**, **Wallet Deep Dive**, and **Cases**.
+   - Maintains cross-view state transitions (e.g. clicking "Investigate" on an alert or case jumps directly to the Wallet Deep Dive or Cases tab with pre-selected identifiers).
+   - Real-time backend connectivity check pill indicator (`/health`).
+   - Global alert modal and case creation modal state.
+
+2. **Dashboard Command Center (`frontend/src/components/DashboardView.jsx`)**:
+   - **KPI Metric Strip**: Real-time counts for Total Alerts (21), High/Critical Alerts (11), Medium Alerts (9), and Low Alerts (1).
+   - **Pattern Breakdown Matrix**: 6 pattern detection cards with alert volume, severity breakdown, and pattern descriptions (Circular, Rapid Movement, Burst, Fan-Out, Fan-In, Suspicious Cluster). Clicking any card filters directly into the Alerts view.
+   - **Top Threats Feed**: Immediate access to the highest-severity alerts with quick actions to inspect, investigate target wallet, or open case.
+
+3. **Alerts Explorer (`frontend/src/components/AlertsView.jsx`)**:
+   - Filter by severity (`ALL`, `HIGH`, `MEDIUM`, `LOW`) and pattern type.
+   - Real-time keyword search across alert descriptions, pattern names, and implicated wallet addresses.
+   - Multi-field sorting by severity weight, total transfer amount (ETH), and time window duration.
+   - Direct triggers to view forensic evidence or launch an investigation.
+
+4. **Alert Forensic Modal (`frontend/src/components/AlertDetailModal.jsx`)**:
+   - Forensic detail inspection dialog showing full narrative explanation, aggregate ETH volume, time window (seconds/minutes), implicated wallet list with role identification, and transaction hashes.
+   - Quick forensic action buttons: "Investigate Wallet" (opens deep dive), "View Graph" (loads neighborhood), and "Open Case" (pre-populates case creation modal).
+
+5. **Wallet Deep Dive (`frontend/src/components/WalletInvestigationView.jsx`)**:
+   - Address search bar with quick preset scenario buttons (Cycle Origin, Smurfing Hub, Cluster Core, Rapid Hop, Normal Trader).
+   - Risk score gauge (0–100) with color-coded severity levels (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) and contributing pattern breakdown.
+   - Integrated Cytoscape.js neighborhood graph with 1–3 hop depth selector and auto-fit/zoom controls.
+   - Full transaction ledger showing timestamp, direction (`IN` / `OUT`), counterparty wallet, amount (ETH), and category.
+
+6. **Investigation Case Management (`frontend/src/components/InvestigationsView.jsx`)**:
+   - Case list with status filtering (`ALL`, `OPEN`, `CLOSED`).
+   - Detailed case dossier powered by `GET /investigations/{case_id}/summary` displaying case metadata, resolved alerts, target wallet risk assessment, and related wallet risk profiles.
+   - Embedded interactive Cytoscape case graph via `GET /investigations/{case_id}/graph`.
+   - In-place editable analyst forensic notes (`PATCH /investigations/{case_id}/notes`).
+   - One-click case status toggle (`PATCH /investigations/{case_id}/status`).
+
+7. **Create Case Modal (`frontend/src/components/CreateCaseModal.jsx`)**:
+   - Pre-fills target wallet, associated alert IDs, and related counterparty addresses from any view.
+   - Validates input and persists cases to the backend (`POST /investigations`).
+
+8. **Interactive Graph Canvas (`frontend/src/components/GraphViewer.jsx`)**:
+   - Canvas-based rendering with Cytoscape.js using circular and cose-bilkent layout strategies.
+   - Focus node cyan glow, flagged suspect red nodes, counterparty slate nodes, directional arrows, and transfer amount labels.
+   - Node click inspection, responsive resizing, and full zoom/pan navigation.
 
 ---
 
@@ -120,7 +179,7 @@ The backend is built with **FastAPI** (`backend/main.py`), running under **Uvico
   - Detection results (`/alerts`, `/alerts/{alert_id}`, `/detection/summary`)
   - Wallet analytics (`/wallets/{wallet_id}/risk`, `/wallets/{wallet_id}/alerts`, `/wallets/{wallet_id}/transactions`)
   - Topological exploration (`/graph/{wallet_id}`)
-  - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`, `/investigations/{case_id}/summary`)
+  - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`, `/investigations/{case_id}/summary`, `/investigations/{case_id}/graph`)
 
 ---
 
@@ -171,7 +230,7 @@ The detection architecture (`backend/detection/`) separates concerns across spec
 
 ---
 
-## Investigation Workflow Layer (Phase 4A & Phase 4B-1)
+## Investigation Workflow Layer (Phase 4)
 
 The investigation workflow provides analyst case management on top of the detection engine:
 
@@ -183,6 +242,8 @@ The investigation workflow provides analyst case management on top of the detect
    - Singleton instance `CASE_STORE` shared across API route handlers.
 3. **Forensic Summary Aggregation (`GET /investigations/{case_id}/summary`)**:
    - Assembles a unified forensic dossier: case metadata, resolved alert objects, target wallet risk assessment, target wallet transaction history, and risk assessments for all tagged related wallets in a single query.
+4. **Investigation Graph (`GET /investigations/{case_id}/graph`)**:
+   - Reuses the Phase 3 NetworkX-based graph traversal engine (`ENGINE.get_wallet_graph`) centered on the case's target wallet, returning Cytoscape.js compatible nodes, edges, flagged wallet highlights, and configurable hop depth (1–3 hops).
 
 
 ## Risk Model
