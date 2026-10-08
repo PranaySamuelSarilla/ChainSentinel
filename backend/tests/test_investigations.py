@@ -514,3 +514,108 @@ def test_investigation_graph_invalid_depth(client):
     res_high = client.get(f"/investigations/{case_id}/graph?depth=4")
     assert res_high.status_code == 422
 
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 6: Timeline Endpoint Tests
+# ──────────────────────────────────────────────────────────────────
+
+def test_investigation_timeline_initial_creation(client):
+    """GET /investigations/{case_id}/timeline returns initial CASE_CREATED event."""
+    create_res = client.post("/investigations", json={
+        "title": "Timeline Test Case",
+        "target_wallet": DATASET[0]["from_wallet"],
+        "alert_ids": ["ALT-timeline-1"],
+    })
+    case_id = create_res.json()["case_id"]
+
+    res = client.get(f"/investigations/{case_id}/timeline")
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["case_id"] == case_id
+    assert data["total"] >= 1
+    events = data["events"]
+    assert any(e["event_type"] == "CASE_CREATED" for e in events)
+
+
+def test_investigation_timeline_status_and_notes_events(client):
+    """Timeline captures status changes and analyst note updates."""
+    create_res = client.post("/investigations", json={
+        "title": "Lifecycle Case",
+        "target_wallet": DATASET[0]["from_wallet"],
+    })
+    case_id = create_res.json()["case_id"]
+
+    # Update notes
+    client.patch(f"/investigations/{case_id}/notes", json={"notes": "Suspicious cyclic path noted."})
+    # Update status to CLOSED
+    client.patch(f"/investigations/{case_id}/status", json={"status": "CLOSED"})
+
+    res = client.get(f"/investigations/{case_id}/timeline")
+    assert res.status_code == 200
+    events = res.json()["events"]
+    types = [e["event_type"] for e in events]
+
+    assert "CASE_CREATED" in types
+    assert "NOTES_UPDATED" in types
+    assert "STATUS_CHANGED" in types
+
+
+def test_investigation_timeline_evidence_and_integrity_events(client):
+    """Timeline records evidence anchoring and cryptographic Merkle audits."""
+    create_res = client.post("/investigations", json={
+        "title": "Evidence Timeline Case",
+        "target_wallet": DATASET[0]["from_wallet"],
+    })
+    case_id = create_res.json()["case_id"]
+
+    # Add evidence
+    ev_res = client.post(f"/investigations/{case_id}/evidence", json={
+        "evidence_type": "ALERT",
+        "source_ref": "ALT-01",
+        "content": {"score": 90},
+    })
+    assert ev_res.status_code == 201
+
+    # Fetch root and audit
+    root_res = client.get(f"/investigations/{case_id}/evidence/merkle")
+    root = root_res.json()["merkle_root"]
+    client.post(f"/investigations/{case_id}/evidence/merkle/verify", json={"expected_root": root})
+
+    res = client.get(f"/investigations/{case_id}/timeline")
+    assert res.status_code == 200
+    events = res.json()["events"]
+    types = [e["event_type"] for e in events]
+
+    assert "EVIDENCE_ANCHORED" in types
+    assert "INTEGRITY_VERIFIED" in types
+
+
+def test_investigation_timeline_order_param(client):
+    """GET /investigations/{case_id}/timeline respects asc and desc ordering."""
+    create_res = client.post("/investigations", json={
+        "title": "Order Case",
+        "target_wallet": DATASET[0]["from_wallet"],
+    })
+    case_id = create_res.json()["case_id"]
+    client.patch(f"/investigations/{case_id}/notes", json={"notes": "Finding 1"})
+
+    res_asc = client.get(f"/investigations/{case_id}/timeline?order=asc")
+    res_desc = client.get(f"/investigations/{case_id}/timeline?order=desc")
+
+    assert res_asc.status_code == 200
+    assert res_desc.status_code == 200
+    events_asc = res_asc.json()["events"]
+    events_desc = res_desc.json()["events"]
+
+    assert len(events_asc) == len(events_desc)
+    if len(events_asc) > 1:
+        assert events_asc[0]["event_id"] == events_desc[-1]["event_id"]
+
+
+def test_investigation_timeline_not_found(client):
+    """GET /investigations/{case_id}/timeline returns 404 for nonexistent case."""
+    res = client.get("/investigations/CASE-nonexistent/timeline")
+    assert res.status_code == 404
+
+

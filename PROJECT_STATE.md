@@ -11,8 +11,9 @@
 - **Phase 4D — Wallet Investigation & Case Workflow UI**: COMPLETE
 - **Phase 4E — Testing, Verification & Checkpoint**: COMPLETE
 - **Phase 5 — Cryptographic Evidence Integrity & Merkle Verification**: COMPLETE
+- **Phase 6 — Advanced Investigation Workflow**: COMPLETE
 
-**Current Next Phase**: **Phase 6 — Advanced Cybersecurity Visualizations & Activity Charts**
+**Current Next Phase**: **Phase 7 — Flow Tracer & Path Reconstruction**
 
 ---
 
@@ -22,12 +23,13 @@
   - **Dashboard View (`DashboardView.jsx`)**: Cybersecurity command center with live KPI metric strip (21 alerts, 11 high/critical, 9 medium, 1 low), interactive pattern breakdown matrix (6 cards with click-to-filter), top threats feed, and quick forensic jumps.
   - **Alerts Explorer (`AlertsView.jsx` & `AlertDetailModal.jsx`)**: Multi-filter alerts explorer with severity filters (`ALL`, `HIGH`, `MEDIUM`, `LOW`), pattern dropdown, real-time search, sorting by severity/amount/time, and full forensic modal with implicated wallet roles, transaction hashes, and direct "Investigate Wallet" / "Open Case" action buttons.
   - **Wallet Deep Dive (`WalletInvestigationView.jsx`)**: Address search with scenario presets, deterministic risk gauge (0–100) with color-coded levels, contributing pattern breakdown, interactive Cytoscape neighborhood graph with 1–3 hop depth selector, and full inbound/outbound transaction ledger.
-  - **Case Management Workspace (`InvestigationsView.jsx` & `CreateCaseModal.jsx`)**: Complete investigation case workflow with status filtering (`ALL`, `OPEN`, `CLOSED`), comprehensive case dossier (`GET /investigations/{case_id}/summary`), embedded case graph visualization (`GET /investigations/{case_id}/graph`), inline editable analyst notes (`PATCH /notes`), and one-click case status toggle (`PATCH /status`).
-- **FastAPI Backend (`backend/main.py`)**: Asynchronous REST service with CORS enabled for local development, in-memory pre-warmed detection cache, full endpoints for transactions, alerts, risk scores, graphs, and investigation cases.
+  - **Case Management Workspace (`InvestigationsView.jsx`, `CreateCaseModal.jsx`, `AddEvidenceModal.jsx`, `EvidenceIntegrityPanel.jsx`, `CaseTimeline.jsx`)**: Complete investigation case workflow with status filtering (`ALL`, `OPEN`, `CLOSED`), comprehensive case dossier (`GET /investigations/{case_id}/summary`), embedded case graph visualization (`GET /investigations/{case_id}/graph`), inline editable analyst notes (`PATCH /notes`), one-click case status toggle (`PATCH /status`), 5-step lifecycle progress stepper (Opened → Alerts Linked → Evidence Anchored → Merkle Audited → Case Closed), quick "Anchor as Evidence" buttons across alerts and transactions, real-time SHA-256 and Merkle collection audit panel, and unified chronological audit timeline (`GET /investigations/{case_id}/timeline`).
+- **FastAPI Backend (`backend/main.py`)**: Asynchronous REST service with CORS enabled for local development, in-memory pre-warmed detection cache, full endpoints for transactions, alerts, risk scores, graphs, investigation cases, cryptographic evidence, and audit timelines.
 - **Investigation Workflow Backend (`backend/investigations/`)**:
   - `InvestigationCase` domain model (`case_id`, `title`, `target_wallet`, `status`, `notes`, `alert_ids`, `related_wallets`, timestamps)
-  - `InvestigationCaseStore` singleton (`CASE_STORE`) providing in-memory lookup and JSON file persistence (`cases.json`)
-  - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`), comprehensive aggregated case summary (`GET /investigations/{case_id}/summary`), and investigation graph visualization (`GET /investigations/{case_id}/graph`)
+  - `InvestigationTimelineEvent` domain model (`event_id`, `case_id`, `event_type`, `title`, `description`, `timestamp`, `metadata`) and `generate_event_id()` generator (`EVT-<8 hex chars>`)
+  - `InvestigationCaseStore` singleton (`CASE_STORE`) providing in-memory lookup, event tracking, and JSON file persistence (`cases.json`)
+  - Full REST endpoints: create case (`POST /investigations`), list/filter cases (`GET /investigations`), retrieve case (`GET /investigations/{case_id}`), update status (`PATCH /investigations/{case_id}/status`), update analyst notes (`PATCH /investigations/{case_id}/notes`), comprehensive aggregated case summary (`GET /investigations/{case_id}/summary`), investigation graph visualization (`GET /investigations/{case_id}/graph`), and unified chronology timeline (`GET /investigations/{case_id}/timeline`)
 - **Cryptographic Evidence & Integrity Layer (`backend/crypto/`)**:
   - `EvidenceRecord` domain model (`evidence_id`, `case_id`, `evidence_type`, `source_ref`, `content`, `created_at`, `evidence_hash`, `metadata`) and `generate_evidence_id` generator (`EVID-<8 hex chars>`).
   - `canonicalize()` deterministic JSON canonicalization function sorting keys at all recursive levels with compact whitespace (`ensure_ascii=True`, `separators=(',', ':')`).
@@ -60,7 +62,7 @@
 - **Wallet Transactions**: `GET /wallets/{wallet_id}/transactions` returning all inbound and outbound transactions for a wallet.
 - **Graph API**: `GET /graph/{wallet_id}?depth=2` returning Cytoscape-formatted nodes and directed edges with flagging metadata.
 - **Detection Summary API**: `GET /detection/summary` returning global alert counts, breakdown by pattern, and breakdown by severity.
-- **Automated Tests (`backend/tests/`)**: 125 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, investigation workflow, and cryptographic evidence integrity with Merkle trees (100% passing).
+- **Automated Tests (`backend/tests/`)**: 130 automated pytest unit and integration tests covering data loading, topology verification, all detectors, edge cases, risk scoring, REST endpoints, investigation workflow, timeline chronology, and cryptographic evidence integrity with Merkle trees (100% passing).
 
 ---
 
@@ -166,6 +168,7 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 | `PATCH` | `/investigations/{case_id}/notes` | Body: `notes` (string) | Update investigation case notes; returns updated case object |
 | `GET` | `/investigations/{case_id}/summary` | `case_id` (string) | Comprehensive forensic investigation summary (case, target risk, resolved alerts, transactions, related risks, evidence_count) |
 | `GET` | `/investigations/{case_id}/graph` | `case_id` (string), `depth` (1-3, default 2) | Cytoscape graph data centered on case target wallet (reusing Phase 3 graph engine) |
+| `GET` | `/investigations/{case_id}/timeline` | `case_id` (string), `order` (`asc` or `desc`, default `asc`) | Chronological audit timeline synthesizing case lifecycle, linked alerts, evidence, verification, and analyst notes |
 | `POST` | `/investigations/{case_id}/evidence` | Body: `evidence_type`, `source_ref`, `content`, optional `metadata` | Cryptographically anchor evidence record (201 Created); computes canonical SHA-256 hash |
 | `GET` | `/investigations/{case_id}/evidence` | `case_id` (string) | List all evidence records bound to a case; returns array and total |
 | `GET` | `/evidence/{evidence_id}` | `evidence_id` (string) | Retrieve single evidence record by ID; returns 404 if not found |
@@ -192,8 +195,8 @@ Defined in `backend/detection/config.py` and implemented in `backend/detection/r
 
 ## Current Phase
 
-- **Current Status**: **Phase 5 Complete** (Phase 5: EvidenceRecord model, Canonicalization, SHA-256 Hashing, EvidenceStore, MerkleTree with odd-leaf duplicate balancing and proofs, 6 REST APIs, 35 unit/integration tests)
-- **Next Task**: **Phase 6 — Advanced Cybersecurity Visualizations & Activity Charts**
+- **Current Status**: **Phase 6 Complete** (Phase 6: Advanced Investigation Workflow: 5-step lifecycle stepper, AddEvidenceModal, EvidenceIntegrityPanel with SHA-256 and Merkle collection verification, CaseTimeline chronological audit events, backend event tracking, GET /investigations/{case_id}/timeline, 130 tests passing)
+- **Next Task**: **Phase 7 — Flow Tracer & Path Reconstruction**
 
 > **IMPORTANT RULE**: This file must be updated at the end of each completed phase to maintain persistent project context.
 

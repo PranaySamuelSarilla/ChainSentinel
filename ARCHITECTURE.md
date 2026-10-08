@@ -63,12 +63,15 @@ ChainSentinel/
 │   │   │   ├── client.js             # Universal fetch wrapper with direct/proxy fallback
 │   │   │   └── index.js              # Re-exports for components
 │   │   └── components/
+│   │       ├── AddEvidenceModal.jsx         # Modal for anchoring evidence with JSON validation
 │   │       ├── AlertDetailModal.jsx         # Full forensic alert drill-down & evidence modal
 │   │       ├── AlertsView.jsx               # Interactive alerts explorer with search, severity & pattern filters
+│   │       ├── CaseTimeline.jsx             # Chronological investigation audit timeline with filters
 │   │       ├── CreateCaseModal.jsx          # Modal for launching investigation cases
 │   │       ├── DashboardView.jsx            # Cybersecurity command center with KPI metrics and pattern cards
+│   │       ├── EvidenceIntegrityPanel.jsx   # Merkle tree & SHA-256 verification dashboard
 │   │       ├── GraphViewer.jsx              # Cytoscape.js canvas component with controls & focus glow
-│   │       ├── InvestigationsView.jsx       # Case management workspace with summary dossiers & notes
+│   │       ├── InvestigationsView.jsx       # Case management workspace with 5-step lifecycle & evidence
 │   │       └── WalletInvestigationView.jsx  # Wallet deep-dive with risk gauge, graph & transaction ledger
 │   └── dist/                         # Verified production bundle build
 └── backend/                          # Forensics analytics backend
@@ -93,10 +96,10 @@ ChainSentinel/
     │   ├── clusters.py               # Dense subgraph / community detector
     │   ├── risk.py                   # Additive risk scoring engine
     │   └── engine.py                 # DetectionEngine orchestrator and graph extractor
-    ├── investigations/               # Investigation case workflow (Phase 4)
+    ├── investigations/               # Investigation case & timeline workflow (Phases 4 & 6)
     │   ├── __init__.py               # Package exports
-    │   ├── models.py                 # InvestigationCase domain model & case ID generator
-    │   └── store.py                  # In-memory case repository with JSON persistence
+    │   ├── models.py                 # InvestigationCase, TimelineEvent & ID generators
+    │   └── store.py                  # In-memory case and timeline repository with JSON persistence
     ├── crypto/                       # Cryptographic evidence & Merkle verification (Phase 5)
     │   ├── __init__.py               # Package exports
     │   ├── models.py                 # EvidenceRecord dataclass & ID generator
@@ -107,7 +110,7 @@ ChainSentinel/
         ├── __init__.py
         ├── test_basic.py             # Phase 1/2 tests (7 tests)
         ├── test_detection.py         # Phase 3 detection tests (56 tests)
-        ├── test_investigations.py    # Phase 4 investigation tests (27 tests)
+        ├── test_investigations.py    # Phase 4/6 investigation & timeline tests (32 tests)
         └── test_crypto.py            # Phase 5 cryptographic integrity tests (35 tests)
 ```
 
@@ -158,6 +161,10 @@ The frontend is an investigation cockpit built with:
    - Case list with status filtering (`ALL`, `OPEN`, `CLOSED`).
    - Detailed case dossier powered by `GET /investigations/{case_id}/summary` displaying case metadata, resolved alerts, target wallet risk assessment, and related wallet risk profiles.
    - Embedded interactive Cytoscape case graph via `GET /investigations/{case_id}/graph`.
+   - **5-Step Case Lifecycle Stepper**: Visual indicator tracking case stages (`1. Opened` ──► `2. Alerts Linked` ──► `3. Evidence Anchored` ──► `4. Merkle Audited` ──► `5. Case Closed`).
+   - **Quick Action Evidence Anchoring**: One-click buttons to anchor linked alerts, target wallet risk profiles, or individual transactions directly as cryptographic evidence items.
+   - Embedded `EvidenceIntegrityPanel` for SHA-256 and Merkle verification.
+   - Embedded `CaseTimeline` for chronological audit trail.
    - In-place editable analyst forensic notes (`PATCH /investigations/{case_id}/notes`).
    - One-click case status toggle (`PATCH /investigations/{case_id}/status`).
 
@@ -169,6 +176,24 @@ The frontend is an investigation cockpit built with:
    - Canvas-based rendering with Cytoscape.js using circular and cose-bilkent layout strategies.
    - Focus node cyan glow, flagged suspect red nodes, counterparty slate nodes, directional arrows, and transfer amount labels.
    - Node click inspection, responsive resizing, and full zoom/pan navigation.
+
+9. **Add Evidence Modal (`frontend/src/components/AddEvidenceModal.jsx`)**:
+   - Anchors forensic artifacts to the active case (`POST /investigations/{case_id}/evidence`).
+   - Supports 6 evidence types: `TRANSACTION`, `ALERT`, `WALLET_RISK`, `ANALYST_NOTE`, `GRAPH_SNAPSHOT`, `CUSTOM`.
+   - Live JSON validation editor with formatting helper and analyst contextual description field.
+
+10. **Evidence Integrity Panel (`frontend/src/components/EvidenceIntegrityPanel.jsx`)**:
+    - Real-time cryptographic verification interface displaying anchored evidence count, verified ratio, and Merkle root.
+    - One-click copy for 64-character hex Merkle roots.
+    - Full collection audit against Merkle root (`POST /investigations/{case_id}/evidence/merkle/verify`) with success banner and audited leaf breakdown.
+    - Per-item on-demand verification buttons (`GET /evidence/{evidence_id}/verify`) with pass/fail badges.
+    - Expandable canonical JSON payload viewer for forensic inspection.
+
+11. **Case Chronology Timeline (`frontend/src/components/CaseTimeline.jsx`)**:
+    - Chronological event stream (`GET /investigations/{case_id}/timeline`) reconstructing the lifecycle of the investigation.
+    - Distinct event badges: `CASE_CREATED`, `ALERT_LINKED`, `EVIDENCE_ANCHORED`, `INTEGRITY_VERIFIED`, `STATUS_CHANGED`, `NOTES_UPDATED`.
+    - Human-readable relative elapsed time plus exact ISO/UTC timestamps.
+    - Sort order toggle (`asc` chronological vs `desc` reverse-chronological).
 
 ---
 
@@ -184,7 +209,7 @@ The backend is built with **FastAPI** (`backend/main.py`), running under **Uvico
   - Detection results (`/alerts`, `/alerts/{alert_id}`, `/detection/summary`)
   - Wallet analytics (`/wallets/{wallet_id}/risk`, `/wallets/{wallet_id}/alerts`, `/wallets/{wallet_id}/transactions`)
   - Topological exploration (`/graph/{wallet_id}`)
-  - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`, `/investigations/{case_id}/summary`, `/investigations/{case_id}/graph`)
+  - Investigation cases (`/investigations`, `/investigations/{case_id}`, `/investigations/{case_id}/status`, `/investigations/{case_id}/notes`, `/investigations/{case_id}/summary`, `/investigations/{case_id}/graph`, `/investigations/{case_id}/timeline`)
   - Cryptographic evidence & Merkle verification (`/investigations/{case_id}/evidence`, `/evidence/{evidence_id}`, `/evidence/{evidence_id}/verify`, `/investigations/{case_id}/evidence/merkle`, `/investigations/{case_id}/evidence/merkle/verify`)
 
 ---
@@ -236,20 +261,24 @@ The detection architecture (`backend/detection/`) separates concerns across spec
 
 ---
 
-## Investigation Workflow Layer (Phase 4)
+## Investigation Workflow & Timeline Layer (Phases 4 & 6)
 
-The investigation workflow provides analyst case management on top of the detection engine:
+The investigation workflow provides analyst case management, timeline chronology, and auditability on top of the detection and crypto layers:
 
 1. **`models.py` (`backend/investigations/models.py`)**:
    - `InvestigationCase`: Domain dataclass holding `case_id`, `title`, `target_wallet`, `status` (`OPEN` / `CLOSED`), `notes`, `alert_ids`, `related_wallets`, and UTC timestamps (`created_at`, `updated_at`).
-   - `generate_case_id()`: Creates deterministic, collision-resistant case IDs (`CASE-<8 hex chars>`) using target wallet, timestamp, and entropy.
+   - `InvestigationTimelineEvent`: Domain dataclass holding `event_id`, `case_id`, `event_type` (`CASE_CREATED`, `ALERT_LINKED`, `EVIDENCE_ANCHORED`, `INTEGRITY_VERIFIED`, `STATUS_CHANGED`, `NOTES_UPDATED`), `title`, `description`, `timestamp`, and `metadata`.
+   - `generate_case_id()`: Creates deterministic, collision-resistant case IDs (`CASE-<8 hex chars>`).
+   - `generate_event_id()`: Creates collision-resistant timeline event IDs (`EVT-<8 hex chars>`).
 2. **`store.py` (`backend/investigations/store.py`)**:
-   - `InvestigationCaseStore`: In-memory repository with thread-safe dictionary lookup and automatic JSON file persistence (`cases.json`). Survives process restarts while avoiding database configuration complexity for the MVP.
+   - `InvestigationCaseStore`: In-memory repository with thread-safe dictionary lookup and automatic JSON file persistence (`cases.json`). Automatically records lifecycle audit events when cases are opened, status is changed, or notes are saved.
    - Singleton instance `CASE_STORE` shared across API route handlers.
 3. **Forensic Summary Aggregation (`GET /investigations/{case_id}/summary`)**:
    - Assembles a unified forensic dossier: case metadata, resolved alert objects, target wallet risk assessment, target wallet transaction history, and risk assessments for all tagged related wallets in a single query.
 4. **Investigation Graph (`GET /investigations/{case_id}/graph`)**:
    - Reuses the Phase 3 NetworkX-based graph traversal engine (`ENGINE.get_wallet_graph`) centered on the case's target wallet, returning Cytoscape.js compatible nodes, edges, flagged wallet highlights, and configurable hop depth (1–3 hops).
+5. **Chronological Investigation Timeline (`GET /investigations/{case_id}/timeline`)**:
+   - Synthesizes all historical events into a unified, chronological timeline: case creation, alerts linked, evidence anchored, Merkle integrity audits, status transitions, and note updates. Supports ascending/descending temporal sorting.
 
 ---
 

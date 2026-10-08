@@ -167,3 +167,42 @@ export async function updateInvestigationNotes(caseId, notes) {
     body: JSON.stringify({ notes }),
   });
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Cryptographic Evidence & Integrity (Phase 5 & 6)
+// ──────────────────────────────────────────────────────────────────
+
+export async function getCaseEvidence(caseId) {
+  return request(`/investigations/${encodeURIComponent(caseId)}/evidence`);
+}
+
+export async function getEvidence(evidenceId) {
+  return request(`/evidence/${encodeURIComponent(evidenceId)}`);
+}
+
+export async function createCaseEvidence(caseId, data) {
+  return request(`/investigations/${encodeURIComponent(caseId)}/evidence`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function verifyEvidence(evidenceId) {
+  return request(`/evidence/${encodeURIComponent(evidenceId)}/verify`);
+}
+
+export async function getCaseMerkleRoot(caseId) {
+  return request(`/investigations/${encodeURIComponent(caseId)}/evidence/merkle`);
+}
+
+export async function verifyCaseMerkleRoot(caseId, expectedRoot) {
+  return request(`/investigations/${encodeURIComponent(caseId)}/evidence/merkle/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ expected_root: expectedRoot }),
+  });
+}
+
+export async function getCaseTimeline(caseId, order = 'asc') {
+  return request(`/investigations/${encodeURIComponent(caseId)}/timeline?order=${order}`);
+}
+

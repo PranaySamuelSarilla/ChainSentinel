@@ -85,3 +85,54 @@ def generate_case_id(target_wallet: str, created_at: str) -> str:
     raw = f"{target_wallet}:{created_at}:{uuid.uuid4().hex[:8]}"
     digest = hashlib.sha256(raw.encode()).hexdigest()[:8]
     return f"CASE-{digest}"
+
+
+@dataclass
+class InvestigationTimelineEvent:
+    """
+    A single chronological audit event in an investigation case lifecycle.
+    """
+    event_id: str
+    case_id: str
+    event_type: str        # e.g. CASE_CREATED, STATUS_CHANGED, NOTES_UPDATED, EVIDENCE_ANCHORED, INTEGRITY_VERIFIED
+    title: str
+    description: str
+    timestamp: str         # ISO-8601 UTC
+    actor: str             # e.g. "Analyst", "Integrity Engine"
+    metadata: Dict = field(default_factory=dict)
+
+    def to_dict(self) -> Dict:
+        return {
+            "event_id": self.event_id,
+            "case_id": self.case_id,
+            "event_type": self.event_type,
+            "title": self.title,
+            "description": self.description,
+            "timestamp": self.timestamp,
+            "actor": self.actor,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "InvestigationTimelineEvent":
+        return cls(
+            event_id=data["event_id"],
+            case_id=data["case_id"],
+            event_type=data["event_type"],
+            title=data["title"],
+            description=data["description"],
+            timestamp=data["timestamp"],
+            actor=data.get("actor", "Analyst"),
+            metadata=data.get("metadata", {}),
+        )
+
+
+def generate_event_id(case_id: str, event_type: str, timestamp: str) -> str:
+    """
+    Produce a deterministic event ID.
+    Format: EVT-<8 hex chars>
+    """
+    raw = f"{case_id}:{event_type}:{timestamp}:{uuid.uuid4().hex[:8]}"
+    digest = hashlib.sha256(raw.encode()).hexdigest()[:8]
+    return f"EVT-{digest}"
+

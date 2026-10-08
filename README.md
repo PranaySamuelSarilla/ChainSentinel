@@ -31,7 +31,7 @@ ChainSentinel/
 │   │   └── __init__.py
 │   ├── detection/                # Rule-based pattern detection (Phase 3)
 │   │   └── __init__.py
-│   ├── crypto/                   # SHA-256 & Merkle Tree verification (Phase 8)
+│   ├── crypto/                   # SHA-256 & Merkle Tree verification (Phase 5)
 │   │   └── __init__.py
 │   ├── tests/                    # Automated pytest suite
 │   │   ├── test_basic.py         # Tests for dataset and API endpoints
@@ -149,7 +149,7 @@ All 7 test cases verify:
 - [x] **Phase 3**: Rule-Based Detection Engine (Circular, Rapid, Burst, Split, Recomb, Cluster algorithms)
 - [x] **Phase 4**: Forensic Investigation Platform & UI Workflows (Case model, summary/graph APIs, forensic dashboard, alerts explorer, wallet deep-dive, case dossiers)
 - [x] **Phase 5**: Cryptographic Evidence Integrity & Merkle Tree Verification (Canonical JSON, SHA-256 digests, Merkle root audits, tamper detection APIs)
-- [ ] **Phase 6**: Advanced Cybersecurity Visualizations & Activity Charts
+- [x] **Phase 6**: Advanced Investigation Workflow (End-to-end flow: Alert → Wallet Deep Dive → Case Dossier → Evidence Anchoring → Merkle Audit → Investigation Chronology Timeline → Closure)
 - [ ] **Phase 7**: Flow Tracer & Path Reconstruction
 - [ ] **Phase 8**: Evidence Export & Case Notarization
 - [ ] **Phase 9**: Full End-to-End System Integration

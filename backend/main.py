@@ -39,6 +39,9 @@ Endpoints:
     GET  /evidence/{evidence_id}/verify
     GET  /investigations/{case_id}/evidence/merkle
     POST /investigations/{case_id}/evidence/merkle/verify
+
+  Phase 6 (advanced investigation workflow):
+    GET  /investigations/{case_id}/timeline
 """
 
 from datetime import datetime, timezone
@@ -50,7 +53,13 @@ from pydantic import BaseModel
 try:
     from backend.data.loader import load_transactions, get_dataset_stats
     from backend.detection.engine import DetectionEngine
-    from backend.investigations.models import InvestigationCase, CaseStatus, generate_case_id
+    from backend.investigations.models import (
+        InvestigationCase,
+        CaseStatus,
+        generate_case_id,
+        InvestigationTimelineEvent,
+        generate_event_id,
+    )
     from backend.investigations.store import CASE_STORE
     from backend.crypto.models import EvidenceRecord, EvidenceType, generate_evidence_id
     from backend.crypto.canonical import compute_evidence_hash, verify_evidence_hash
@@ -59,7 +68,13 @@ try:
 except (ImportError, ModuleNotFoundError):
     from data.loader import load_transactions, get_dataset_stats
     from detection.engine import DetectionEngine
-    from investigations.models import InvestigationCase, CaseStatus, generate_case_id
+    from investigations.models import (
+        InvestigationCase,
+        CaseStatus,
+        generate_case_id,
+        InvestigationTimelineEvent,
+        generate_event_id,
+    )
     from investigations.store import CASE_STORE
     from crypto.models import EvidenceRecord, EvidenceType, generate_evidence_id
     from crypto.canonical import compute_evidence_hash, verify_evidence_hash
@@ -504,6 +519,24 @@ def create_case_evidence(case_id: str, payload: CreateEvidenceRequest):
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
+    # Log timeline event to case store
+    evt = InvestigationTimelineEvent(
+        event_id=generate_event_id(case_id, "EVIDENCE_ANCHORED", now_iso),
+        case_id=case_id,
+        event_type="EVIDENCE_ANCHORED",
+        title=f"Evidence Anchored ({ev_type})",
+        description=f"Cryptographically hashed evidence record {saved.evidence_id} added with source ref '{source_ref}'.",
+        timestamp=now_iso,
+        actor="Evidence Engine",
+        metadata={
+            "evidence_id": saved.evidence_id,
+            "evidence_type": ev_type,
+            "source_ref": source_ref,
+            "evidence_hash": saved.evidence_hash,
+        },
+    )
+    CASE_STORE.add_event(evt)
+
     return saved.to_dict()
 
 
@@ -600,6 +633,25 @@ def verify_case_merkle_root(case_id: str, payload: VerifyMerkleRootRequest):
     root_match = (expected_norm == computed_norm)
     valid = root_match and (tampered_count == 0)
 
+    # Log audit event to case store
+    now_iso = datetime.now(timezone.utc).isoformat()
+    evt = InvestigationTimelineEvent(
+        event_id=generate_event_id(case_id, "INTEGRITY_VERIFIED", now_iso),
+        case_id=case_id,
+        event_type="INTEGRITY_VERIFIED",
+        title="Merkle Integrity Audit Executed",
+        description=f"Collection integrity audited against Merkle root. Status: {'VERIFIED INTACT' if valid else 'COMPROMISED'} ({intact_count}/{len(records)} leaves intact).",
+        timestamp=now_iso,
+        actor="Integrity Engine",
+        metadata={
+            "valid": valid,
+            "root_match": root_match,
+            "intact_leaves_count": intact_count,
+            "total_leaves": len(records),
+        },
+    )
+    CASE_STORE.add_event(evt)
+
     return {
         "case_id": case_id,
         "expected_root": payload.expected_root,
@@ -610,6 +662,75 @@ def verify_case_merkle_root(case_id: str, payload: VerifyMerkleRootRequest):
         "total_leaves": len(records),
         "intact_leaves_count": intact_count,
         "tampered_leaves_count": tampered_count,
-        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "verified_at": now_iso,
     }
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 6 Endpoints — Advanced Investigation Workflow & Timeline
+# ──────────────────────────────────────────────────────────────────
+
+@app.get("/investigations/{case_id}/timeline")
+def get_investigation_timeline(
+    case_id: str,
+    order: str = Query("asc", description="Sort order: 'asc' (chronological) or 'desc'"),
+):
+    """
+    Return the complete, chronological audit timeline for an investigation case.
+    Synthesizes events from case creation, alert linkages, evidence anchors,
+    status transitions, analyst notes updates, and Merkle integrity audits.
+    """
+    case = CASE_STORE.get(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    events = list(CASE_STORE.get_events(case_id))
+
+    # Ensure baseline creation event exists
+    has_creation = any(e.event_type == "CASE_CREATED" for e in events)
+    if not has_creation:
+        events.append(InvestigationTimelineEvent(
+            event_id=generate_event_id(case_id, "CASE_CREATED", case.created_at),
+            case_id=case_id,
+            event_type="CASE_CREATED",
+            title="Investigation Opened",
+            description=f"Formal case initialized for target wallet {case.target_wallet} with {len(case.alert_ids)} linked alert(s).",
+            timestamp=case.created_at,
+            actor="Lead Investigator",
+            metadata={"target_wallet": case.target_wallet, "alert_ids": case.alert_ids},
+        ))
+
+    # Ensure all evidence records from the store are represented
+    existing_evidence_ids = {
+        e.metadata.get("evidence_id")
+        for e in events
+        if e.event_type == "EVIDENCE_ANCHORED" and "evidence_id" in e.metadata
+    }
+    for ev in EVIDENCE_STORE.list_by_case(case_id):
+        if ev.evidence_id not in existing_evidence_ids:
+            events.append(InvestigationTimelineEvent(
+                event_id=generate_event_id(case_id, "EVIDENCE_ANCHORED", ev.created_at),
+                case_id=case_id,
+                event_type="EVIDENCE_ANCHORED",
+                title=f"Evidence Anchored ({ev.evidence_type})",
+                description=f"Cryptographically hashed evidence record {ev.evidence_id} added (source: '{ev.source_ref}', SHA-256: {ev.evidence_hash[:16]}...).",
+                timestamp=ev.created_at,
+                actor="Evidence Engine",
+                metadata={
+                    "evidence_id": ev.evidence_id,
+                    "evidence_type": ev.evidence_type,
+                    "source_ref": ev.source_ref,
+                    "evidence_hash": ev.evidence_hash,
+                },
+            ))
+
+    reverse = (order.lower() == "desc")
+    sorted_events = sorted(events, key=lambda e: (e.timestamp, e.event_id), reverse=reverse)
+
+    return {
+        "case_id": case_id,
+        "total": len(sorted_events),
+        "events": [e.to_dict() for e in sorted_events],
+    }
+
 

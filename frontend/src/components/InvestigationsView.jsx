@@ -8,16 +8,24 @@ import {
   Unlock,
   Save,
   Check,
-  Network
+  Network,
+  ShieldCheck,
+  FilePlus2,
+  ExternalLink
 } from 'lucide-react';
 import {
   getInvestigations,
   getInvestigationSummary,
   updateInvestigationStatus,
   updateInvestigationNotes,
-  getInvestigationGraph
+  getInvestigationGraph,
+  getCaseEvidence,
+  getCaseMerkleRoot
 } from '../api';
 import GraphViewer from './GraphViewer';
+import AddEvidenceModal from './AddEvidenceModal';
+import EvidenceIntegrityPanel from './EvidenceIntegrityPanel';
+import CaseTimeline from './CaseTimeline';
 
 export default function InvestigationsView({
   onOpenCreateCaseModal,
@@ -31,9 +39,21 @@ export default function InvestigationsView({
   const [caseGraphData, setCaseGraphData] = useState(null);
   const [showCaseGraph, setShowCaseGraph] = useState(false);
 
+  // Evidence and Merkle states
+  const [caseEvidence, setCaseEvidence] = useState([]);
+  const [caseMerkleData, setCaseMerkleData] = useState(null);
+  const [showAddEvidenceModal, setShowAddEvidenceModal] = useState(false);
+  const [evidenceModalType, setEvidenceModalType] = useState('TRANSACTION');
+  const [evidenceModalRef, setEvidenceModalRef] = useState('');
+  const [evidenceModalContent, setEvidenceModalContent] = useState({});
+
+  // Notes state
   const [notesDraft, setNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSavedNotice, setNotesSavedNotice] = useState(false);
+
+  // Timeline trigger counter
+  const [timelineKey, setTimelineKey] = useState(0);
 
   const [loadingList, setLoadingList] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -63,6 +83,21 @@ export default function InvestigationsView({
     fetchCases();
   }, [fetchCases]);
 
+  // Load evidence and Merkle data
+  const fetchEvidenceData = useCallback(async (caseId) => {
+    if (!caseId) return;
+    try {
+      const [evRes, merkleRes] = await Promise.all([
+        getCaseEvidence(caseId).catch(() => ({ evidence: [] })),
+        getCaseMerkleRoot(caseId).catch(() => null),
+      ]);
+      setCaseEvidence(evRes.evidence || []);
+      setCaseMerkleData(merkleRes);
+    } catch (err) {
+      console.error('Failed to load evidence records:', err);
+    }
+  }, []);
+
   // Load selected case summary
   const fetchSummary = useCallback(async (caseId) => {
     if (!caseId) return;
@@ -71,7 +106,10 @@ export default function InvestigationsView({
     setShowCaseGraph(false);
     setCaseGraphData(null);
     try {
-      const data = await getInvestigationSummary(caseId);
+      const [data] = await Promise.all([
+        getInvestigationSummary(caseId),
+        fetchEvidenceData(caseId),
+      ]);
       setCaseSummary(data);
       setNotesDraft(data.case?.notes || '');
     } catch (err) {
@@ -80,13 +118,18 @@ export default function InvestigationsView({
     } finally {
       setLoadingSummary(false);
     }
-  }, []);
+  }, [fetchEvidenceData]);
 
   useEffect(() => {
     if (selectedCaseId) {
       fetchSummary(selectedCaseId);
     }
   }, [selectedCaseId, fetchSummary]);
+
+  // Trigger timeline reload
+  const triggerTimelineRefresh = () => {
+    setTimelineKey((k) => k + 1);
+  };
 
   // Handle Case Status Toggle
   const handleToggleStatus = async () => {
@@ -98,6 +141,7 @@ export default function InvestigationsView({
       await updateInvestigationStatus(caseSummary.case.case_id, newStatus);
       await fetchSummary(caseSummary.case.case_id);
       await fetchCases();
+      triggerTimelineRefresh();
     } catch (err) {
       console.error('Status update failed:', err);
       setError(`Failed to update case status: ${err.message}`);
@@ -115,6 +159,7 @@ export default function InvestigationsView({
       setNotesSavedNotice(true);
       setTimeout(() => setNotesSavedNotice(false), 2500);
       await fetchSummary(caseSummary.case.case_id);
+      triggerTimelineRefresh();
     } catch (err) {
       console.error('Notes save failed:', err);
       setError(`Failed to save analyst notes: ${err.message}`);
@@ -143,6 +188,54 @@ export default function InvestigationsView({
     }
   };
 
+  // Quick Action: Anchor an Alert as Evidence
+  const handleAnchorAlert = (alert) => {
+    setEvidenceModalType('ALERT');
+    setEvidenceModalRef(alert.alert_id);
+    setEvidenceModalContent({
+      alert_id: alert.alert_id,
+      pattern: alert.pattern,
+      severity: alert.severity,
+      total_amount: alert.total_amount,
+      explanation: alert.explanation,
+      implicated_wallets: alert.wallets,
+      transaction_ids: alert.transaction_ids,
+    });
+    setShowAddEvidenceModal(true);
+  };
+
+  // Quick Action: Anchor a Transfer as Evidence
+  const handleAnchorTransaction = (tx) => {
+    setEvidenceModalType('TRANSACTION');
+    setEvidenceModalRef(tx.tx_id);
+    setEvidenceModalContent({
+      tx_id: tx.tx_id,
+      from_wallet: tx.from_wallet,
+      to_wallet: tx.to_wallet,
+      amount: tx.amount,
+      timestamp: tx.timestamp,
+      category_label: tx.category_label,
+      description: tx.description,
+    });
+    setShowAddEvidenceModal(true);
+  };
+
+  // Quick Action: Anchor Risk Profile as Evidence
+  const handleAnchorRisk = () => {
+    if (!caseSummary?.target_wallet_risk || !caseSummary?.case) return;
+    const r = caseSummary.target_wallet_risk;
+    setEvidenceModalType('WALLET_RISK');
+    setEvidenceModalRef(caseSummary.case.target_wallet);
+    setEvidenceModalContent({
+      target_wallet: caseSummary.case.target_wallet,
+      risk_score: r.risk_score,
+      risk_level: r.risk_level,
+      pattern_types: r.pattern_types,
+      explanation: r.explanation,
+    });
+    setShowAddEvidenceModal(true);
+  };
+
   const getSeverityBadge = (sev) => {
     switch (sev) {
       case 'CRITICAL':
@@ -164,10 +257,10 @@ export default function InvestigationsView({
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4.5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
         <div>
           <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <FolderLock className="w-5 h-5 text-indigo-400" /> Case Management & Evidence Dossiers
+            <FolderLock className="w-5 h-5 text-indigo-400" /> Case Management &amp; Forensic Dossiers
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Formal investigation repository with live risk aggregation, analyst observations, and status auditing.
+            Full end-to-end investigation workspace: alert triage, wallet telemetry, tamper-evident Merkle records, and chronological audit trails.
           </p>
         </div>
 
@@ -268,7 +361,7 @@ export default function InvestigationsView({
           {loadingSummary ? (
             <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-24 text-center text-slate-400 font-mono text-xs flex flex-col items-center justify-center gap-3">
               <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
-              <span>Compiling case dossier from Detection Engine & Case Store...</span>
+              <span>Compiling case dossier &amp; cryptographic audit trail...</span>
             </div>
           ) : caseSummary ? (
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-6 shadow-xl">
@@ -289,7 +382,7 @@ export default function InvestigationsView({
                       {caseSummary.case?.status}
                     </span>
                     <span className="text-[10px] font-mono text-slate-500">
-                      Created: {new Date(caseSummary.case?.created_at).toLocaleString()}
+                      Opened: {new Date(caseSummary.case?.created_at).toLocaleString()}
                     </span>
                   </div>
 
@@ -301,9 +394,9 @@ export default function InvestigationsView({
                     <button
                       type="button"
                       onClick={() => onInvestigateWallet(caseSummary.case?.target_wallet)}
-                      className="text-cyan-400 hover:text-cyan-300 text-[11px] underline ml-1"
+                      className="text-cyan-400 hover:text-cyan-300 text-[11px] underline ml-1 flex items-center gap-0.5"
                     >
-                      Deep Dive
+                      Deep Dive <ExternalLink className="w-3 h-3 inline" />
                     </button>
                   </div>
                 </div>
@@ -342,6 +435,36 @@ export default function InvestigationsView({
                 </div>
               </div>
 
+              {/* Investigation Workflow Lifecycle Stepper */}
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 font-mono text-[11px]">
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">
+                  Workflow Lifecycle State
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {[
+                    { label: '1. Opened', done: true },
+                    { label: '2. Alerts Linked', done: (caseSummary.resolved_alerts?.length || 0) > 0 },
+                    { label: '3. Evidence Anchored', done: caseEvidence.length > 0 },
+                    { label: '4. Merkle Audited', done: caseEvidence.length > 0 },
+                    { label: '5. Case Closed', done: caseSummary.case?.status === 'CLOSED' },
+                  ].map((step) => (
+                    <div
+                      key={step.label}
+                      className={`p-2 rounded-lg border text-center transition-colors ${
+                        step.done
+                          ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-300'
+                          : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {step.done ? <Check className="w-3 h-3 text-emerald-400" /> : <div className="w-3 h-3 rounded-full border border-slate-600" />}
+                        <span className="font-bold">{step.label}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Collapsible Case Graph Canvas */}
               {showCaseGraph && caseGraphData && (
                 <div className="space-y-2 p-3 bg-slate-950 rounded-xl border border-slate-800 animate-in fade-in duration-150">
@@ -362,12 +485,22 @@ export default function InvestigationsView({
                 </div>
               )}
 
-              {/* Target Wallet Risk Profile */}
+              {/* Target Wallet Risk Profile Card */}
               {caseSummary.target_wallet_risk && (
                 <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4.5 space-y-2.5">
-                  <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
-                    Target Risk Assessment (from Detection Engine)
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
+                      Target Risk Assessment (from Detection Engine)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAnchorRisk}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded text-[10px] font-mono flex items-center gap-1 transition-colors"
+                    >
+                      <ShieldCheck className="w-3 h-3" /> Anchor Risk as Evidence
+                    </button>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl font-bold font-mono text-white">
@@ -392,6 +525,29 @@ export default function InvestigationsView({
                   </p>
                 </div>
               )}
+
+              {/* Evidence Integrity & Merkle Panel (Phase 5 & 6) */}
+              <EvidenceIntegrityPanel
+                caseId={caseSummary.case?.case_id}
+                evidenceList={caseEvidence}
+                merkleData={caseMerkleData}
+                onRefreshEvidence={() => {
+                  fetchEvidenceData(caseSummary.case?.case_id);
+                  triggerTimelineRefresh();
+                }}
+                onOpenAddEvidenceModal={() => {
+                  setEvidenceModalType('CUSTOM');
+                  setEvidenceModalRef(caseSummary.case?.target_wallet || '');
+                  setEvidenceModalContent({ note: 'Investigative artifact' });
+                  setShowAddEvidenceModal(true);
+                }}
+              />
+
+              {/* Case Chronology Timeline (Phase 6) */}
+              <CaseTimeline
+                key={timelineKey}
+                caseId={caseSummary.case?.case_id}
+              />
 
               {/* Analyst Notes Editor */}
               <div className="space-y-2">
@@ -446,9 +602,18 @@ export default function InvestigationsView({
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-indigo-300 font-bold">{al.pattern}</span>
-                          <span className={`text-[10px] px-2 py-0.2 rounded border font-bold ${getSeverityBadge(al.severity)}`}>
-                            {al.severity}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] px-2 py-0.2 rounded border font-bold ${getSeverityBadge(al.severity)}`}>
+                              {al.severity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAnchorAlert(al)}
+                              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded text-[10px] flex items-center gap-1 transition-colors"
+                            >
+                              <FilePlus2 className="w-3 h-3" /> Anchor Evidence
+                            </button>
+                          </div>
                         </div>
                         <p className="text-slate-300 text-[11px] font-sans leading-relaxed">{al.explanation}</p>
                         <div className="text-[10px] text-slate-500 pt-0.5">
@@ -478,7 +643,17 @@ export default function InvestigationsView({
                         <span className="text-slate-500">#{tx.tx_id.slice(0, 10)}...</span>{' '}
                         <span className="text-slate-300">{tx.description || tx.category_label}</span>
                       </div>
-                      <div className="text-indigo-300 font-bold shrink-0">{tx.amount?.toFixed(2)} ETH</div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-indigo-300 font-bold">{tx.amount?.toFixed(2)} ETH</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAnchorTransaction(tx)}
+                          title="Anchor this transfer as evidence"
+                          className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded text-[10px] flex items-center gap-1 transition-colors"
+                        >
+                          <FilePlus2 className="w-3 h-3" /> Anchor
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -491,6 +666,22 @@ export default function InvestigationsView({
           )}
         </div>
       </div>
+
+      {/* Anchor Evidence Modal */}
+      <AddEvidenceModal
+        isOpen={showAddEvidenceModal}
+        onClose={() => setShowAddEvidenceModal(false)}
+        caseId={caseSummary?.case?.case_id}
+        initialEvidenceType={evidenceModalType}
+        initialSourceRef={evidenceModalRef}
+        initialContent={evidenceModalContent}
+        onEvidenceAdded={() => {
+          if (caseSummary?.case?.case_id) {
+            fetchEvidenceData(caseSummary.case.case_id);
+            triggerTimelineRefresh();
+          }
+        }}
+      />
     </div>
   );
 }
