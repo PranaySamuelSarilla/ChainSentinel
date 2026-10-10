@@ -974,6 +974,30 @@ def set_provider_mode(req: SwitchModeRequest):
         raise HTTPException(status_code=400, detail=str(err))
 
 
+class MonitoringControlRequest(BaseModel):
+    active: bool
+
+
+@app.post("/api/provider/pause")
+def pause_live_monitoring():
+    """Pauses automatic background block polling while preserving live dataset and LIVE mode."""
+    return PROVIDER_MANAGER.pause_monitoring()
+
+
+@app.post("/api/provider/resume")
+def resume_live_monitoring():
+    """Resumes automatic background block polling for live Ethereum transactions."""
+    return PROVIDER_MANAGER.resume_monitoring()
+
+
+@app.post("/api/provider/monitoring")
+def control_live_monitoring(req: MonitoringControlRequest):
+    """Controls automatic background block polling (active=True or active=False)."""
+    if req.active:
+        return PROVIDER_MANAGER.resume_monitoring()
+    return PROVIDER_MANAGER.pause_monitoring()
+
+
 @app.post("/api/provider/ingest")
 def ingest_live_transactions(req: IngestTransactionsRequest):
     """

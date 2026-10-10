@@ -11,7 +11,9 @@ import {
   Database,
   Radio,
   DownloadCloud,
-  FileDown
+  FileDown,
+  Pause,
+  Play
 } from 'lucide-react';
 import {
   getHealth,
@@ -23,7 +25,9 @@ import {
   getProviderStatus,
   setProviderMode,
   fetchLiveBlock,
-  exportLiveTransactionsCsv
+  exportLiveTransactionsCsv,
+  pauseLiveMonitoring,
+  resumeLiveMonitoring
 } from './api';
 
 import DashboardView from './components/DashboardView';
@@ -70,6 +74,7 @@ export default function App() {
   const [dataMode, setDataMode] = useState('DEMO'); // 'DEMO' | 'LIVE'
   const [providerInfo, setProviderInfo] = useState(null);
   const [switchingMode, setSwitchingMode] = useState(false);
+  const [monitoringLoading, setMonitoringLoading] = useState(false);
   const [pollingBlock, setPollingBlock] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [modeNotification, setModeNotification] = useState(null);
@@ -99,7 +104,8 @@ export default function App() {
       setAlerts(alertsRes.alerts || []);
       setInvestigationsCount(casesRes.investigations?.length || 0);
       if (provRes) {
-        setDataMode(provRes.mode || 'DEMO');
+        const resolved = provRes.active_mode || provRes.mode || 'DEMO';
+        setDataMode(resolved);
         setProviderInfo(provRes);
       }
     } catch (err) {
@@ -152,25 +158,63 @@ export default function App() {
 
   // Mode Switching Handler
   const handleToggleMode = async (targetMode) => {
-    if (switchingMode || targetMode === dataMode) return;
+    if (switchingMode) return;
+    const currentMode = providerInfo?.active_mode || providerInfo?.mode || dataMode;
+    if (targetMode === currentMode && targetMode === dataMode) return;
+
     setSwitchingMode(true);
     try {
       const res = await setProviderMode(targetMode);
-      setDataMode(res.mode);
+      const resolvedMode = res.active_mode || res.mode || targetMode;
+      setDataMode(resolvedMode);
       setProviderInfo(res);
       setModeNotification(
-        targetMode === 'LIVE'
+        resolvedMode === 'LIVE'
           ? `Switched to LIVE mode • Polling Ethereum Mainnet`
           : `Switched to DEMO mode • Benchmark Dataset Active (${res.active_transaction_count ?? 70} txs)`
       );
       setTimeout(() => setModeNotification(null), 4000);
-      await loadInitialData();
+
+      // Refresh data in-place without triggering full screen unmount
+      const [sumRes, infoRes, alertsRes] = await Promise.all([
+        getDetectionSummary(),
+        getDatasetInfo().catch(() => null),
+        getAlerts({ limit: 100 }),
+      ]);
+      setSummary(sumRes);
+      setDatasetInfo(infoRes);
+      setAlerts(alertsRes.alerts || []);
     } catch (err) {
       console.error('Failed to change mode:', err);
-      setModeNotification('Failed to switch data source mode');
+      setModeNotification(`Failed to switch data mode: ${err.message || 'API error'}`);
       setTimeout(() => setModeNotification(null), 4000);
     } finally {
       setSwitchingMode(false);
+    }
+  };
+
+  // Live Monitoring Pause/Resume Handler
+  const handleToggleMonitoring = async () => {
+    if (monitoringLoading) return;
+    setMonitoringLoading(true);
+    try {
+      const isCurrentlyPolling = providerInfo?.is_polling ?? true;
+      let res;
+      if (isCurrentlyPolling) {
+        res = await pauseLiveMonitoring();
+        setModeNotification('Live block monitoring paused • Dataset preserved in SQLite');
+      } else {
+        res = await resumeLiveMonitoring();
+        setModeNotification('Live block monitoring resumed • Polling Ethereum Mainnet');
+      }
+      setProviderInfo(res);
+      setTimeout(() => setModeNotification(null), 4000);
+    } catch (err) {
+      console.error('Failed to toggle live monitoring:', err);
+      setModeNotification(`Monitoring control error: ${err.message || 'API error'}`);
+      setTimeout(() => setModeNotification(null), 4000);
+    } finally {
+      setMonitoringLoading(false);
     }
   };
 
@@ -184,7 +228,18 @@ export default function App() {
       const ingested = res.fetched_count ?? res.ingested_count ?? 0;
       setModeNotification(`Polled block #${blk}: ${ingested} txs ingested (${res.total_persisted_transactions ?? res.total_live_transactions ?? 0} total)`);
       setTimeout(() => setModeNotification(null), 5000);
-      await loadInitialData();
+
+      // Refresh in place
+      const [sumRes, infoRes, alertsRes, provRes] = await Promise.all([
+        getDetectionSummary(),
+        getDatasetInfo().catch(() => null),
+        getAlerts({ limit: 100 }),
+        getProviderStatus().catch(() => null),
+      ]);
+      setSummary(sumRes);
+      setDatasetInfo(infoRes);
+      setAlerts(alertsRes.alerts || []);
+      if (provRes) setProviderInfo(provRes);
     } catch (err) {
       console.error('Failed to poll live block:', err);
       setModeNotification('Live block poll failed: check RPC connectivity');
@@ -349,12 +404,12 @@ export default function App() {
                 type="button"
                 onClick={() => handleToggleMode('DEMO')}
                 disabled={switchingMode}
-                title="Synthetic Benchmark Dataset (70 curated transactions)"
-                className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider transition-all flex items-center gap-1 ${
+                title="Synthetic Benchmark Dataset (70 curated transactions, 21 alerts)"
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider transition-all flex items-center gap-1 ${
                   dataMode === 'DEMO'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 ring-1 ring-indigo-400 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                } disabled:opacity-50`}
               >
                 <Database className="w-3 h-3" />
                 DEMO
@@ -365,19 +420,50 @@ export default function App() {
                 onClick={() => handleToggleMode('LIVE')}
                 disabled={switchingMode}
                 title="Live Blockchain Ingestion & Public RPC Feed"
-                className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider transition-all flex items-center gap-1 ${
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider transition-all flex items-center gap-1 ${
                   dataMode === 'LIVE'
-                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30 ring-1 ring-emerald-400 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                } disabled:opacity-50`}
               >
-                <Radio className={`w-3 h-3 ${dataMode === 'LIVE' ? 'animate-pulse' : ''}`} />
+                <Radio className={`w-3 h-3 ${dataMode === 'LIVE' && (providerInfo?.is_polling !== false) ? 'animate-pulse text-emerald-200' : ''}`} />
                 LIVE
               </button>
             </div>
 
             {dataMode === 'LIVE' && (
               <>
+                {/* Background Monitoring Control: End Live vs Resume Live */}
+                {providerInfo?.is_polling !== false ? (
+                  <button
+                    type="button"
+                    onClick={handleToggleMonitoring}
+                    disabled={monitoringLoading}
+                    title="Stop automatic background live monitoring while keeping website and dataset running"
+                    className="px-2.5 py-1 bg-amber-950/80 hover:bg-amber-900 text-amber-300 rounded-md text-[10px] font-bold flex items-center gap-1 transition-colors border border-amber-600/50 shadow-sm disabled:opacity-50"
+                  >
+                    <Pause className="w-3 h-3 text-amber-400" />
+                    <span>End Live</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 bg-amber-950/70 border border-amber-600/60 rounded text-[10px] text-amber-300 font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                      Monitoring Paused
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleToggleMonitoring}
+                      disabled={monitoringLoading}
+                      title="Resume automatic background live monitoring"
+                      className="px-2.5 py-1 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded-md text-[10px] font-bold flex items-center gap-1 transition-colors border border-emerald-600/50 shadow-sm disabled:opacity-50"
+                    >
+                      <Play className="w-3 h-3 text-emerald-400" />
+                      <span>Resume Live</span>
+                    </button>
+                  </div>
+                )}
+
                 {providerInfo?.latest_block_number && (
                   <span className="px-2 py-0.5 bg-slate-900 border border-slate-700/80 rounded text-[10px] text-cyan-300 font-bold hidden md:inline" title="Latest processed Ethereum block">
                     #{providerInfo.latest_block_number}
@@ -388,7 +474,7 @@ export default function App() {
                   type="button"
                   onClick={handlePollLiveBlock}
                   disabled={pollingBlock}
-                  title="Poll Latest Ethereum Block (Cloudflare RPC)"
+                  title="Poll Latest Ethereum Block on Demand"
                   className="px-2 py-1 bg-slate-850 hover:bg-slate-750 text-cyan-300 rounded-md text-[10px] flex items-center gap-1 transition-colors border border-cyan-800/40 disabled:opacity-50"
                 >
                   <DownloadCloud className={`w-3 h-3 ${pollingBlock ? 'animate-bounce' : ''}`} />
@@ -551,6 +637,7 @@ export default function App() {
             {activeTab === 'dashboard' && (
               <DashboardView
                 dataMode={dataMode}
+                providerInfo={providerInfo}
                 summary={summary}
                 datasetInfo={datasetInfo}
                 alerts={alerts}

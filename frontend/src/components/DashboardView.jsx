@@ -47,6 +47,7 @@ const CLASSIFICATION_COLORS = {
 
 export default function DashboardView({
   dataMode = 'DEMO',
+  providerInfo = null,
   summary,
   datasetInfo,
   alerts,
@@ -130,15 +131,25 @@ export default function DashboardView({
 
       {/* Live Mode Telemetry Banner */}
       {dataMode === 'LIVE' && (
-        <div className="bg-slate-900/80 border border-emerald-500/30 rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono shadow-md glow-emerald">
+        <div className={`bg-slate-900/80 border rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono shadow-md ${
+          providerInfo?.is_polling === false ? 'border-amber-500/40' : 'border-emerald-500/30 glow-emerald'
+        }`}>
           <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+              providerInfo?.is_polling === false ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'
+            }`} />
             <div>
-              <span className="text-emerald-300 font-bold uppercase tracking-wider">Live Ethereum Mainnet Stream Active</span>
+              <span className={`font-bold uppercase tracking-wider ${
+                providerInfo?.is_polling === false ? 'text-amber-300' : 'text-emerald-300'
+              }`}>
+                {providerInfo?.is_polling === false ? 'Live Ingestion Paused • Monitoring Stopped' : 'Live Ethereum Mainnet Stream Active'}
+              </span>
               <span className="text-slate-400 ml-2 hidden sm:inline">
-                {alerts.length === 0
-                  ? 'Recent on-chain blocks ingested. Current activity is normal/benign (0 AML anomalies detected).'
-                  : `${alerts.length} on-chain suspicious topology patterns detected across live blocks.`}
+                {providerInfo?.is_polling === false
+                  ? 'Automatic background block ingestion is paused. On-chain dataset preserved in SQLite. Click "Resume Live" to continue or use "Poll Block" for manual ingestion.'
+                  : (alerts.length === 0
+                    ? 'Recent on-chain blocks ingested. Current activity is normal/benign (0 AML anomalies detected).'
+                    : `${alerts.length} on-chain suspicious topology patterns detected across live blocks.`)}
               </span>
             </div>
           </div>

@@ -122,7 +122,27 @@ class ProviderManager:
             "latest_block_number": status.get("latest_block_number"),
             "last_error": status.get("last_error"),
             "active_mode": self._mode,
+            "mode": self._mode,
+            "is_polling": self._live.is_polling(),
+            "is_monitoring": self._live.is_polling(),
         }
+
+    def pause_monitoring(self) -> Dict[str, Any]:
+        """
+        Pauses automatic background block polling while remaining in LIVE mode.
+        Preserves all collected SQLite data and in-memory analytics.
+        """
+        self._live.stop_polling()
+        return self.get_status()
+
+    def resume_monitoring(self) -> Dict[str, Any]:
+        """
+        Resumes automatic background block polling if currently in LIVE mode.
+        Avoids creating duplicate background workers.
+        """
+        if self._mode == self.MODE_LIVE:
+            self._live.start_polling()
+        return self.get_status()
 
     def export_live_csv(self, filepath: Optional[str] = None) -> str:
         """Exports all persisted live transactions to an Excel-friendly CSV string or file."""
@@ -137,16 +157,21 @@ class ProviderManager:
         active_provider = self.get_active_provider()
         live_status = self._live.get_status()
         synthetic_status = self._synthetic.get_status()
+        is_polling = self._live.is_polling()
 
         return {
+            "mode": self._mode,
             "active_mode": self._mode,
             "is_live_active": self._mode == self.MODE_LIVE,
+            "is_polling": is_polling,
+            "is_monitoring": is_polling,
+            "monitoring_status": "ACTIVE" if is_polling else "PAUSED",
             "active_provider_name": active_provider.name,
             "synthetic_status": synthetic_status,
             "live_status": live_status,
             "active_transaction_count": len(self.get_transactions()),
             "latest_block_number": live_status.get("latest_block_number"),
-            "is_polling": live_status.get("is_polling", False),
+            "last_error": live_status.get("last_error"),
             "live_supported": True,
         }
 

@@ -568,16 +568,14 @@ class LiveBlockchainProvider(BaseTransactionProvider):
                     self._last_error = f"Background poll error: {str(err)}"
                     self._consecutive_errors += 1
 
-            # Sleep in small slices so stop_event is responsive
+            # Wait for next poll interval or immediate stop event signal
             sleep_duration = self._poll_interval
             if self._consecutive_errors > 2:
                 # Polite backoff when failing or rate limited
                 sleep_duration = min(self._poll_interval * 2, 30.0)
 
-            elapsed = 0.0
-            while elapsed < sleep_duration and not self._stop_event.is_set():
-                time.sleep(0.5)
-                elapsed += 0.5
+            if self._stop_event.wait(timeout=sleep_duration):
+                break
 
     # ──────────────────────────────────────────────────────────────────
     # CSV Export

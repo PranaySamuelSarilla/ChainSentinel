@@ -236,3 +236,76 @@ class TestProviderEndpoints:
         data = resp.json()
         assert "fetched_count" in data
         assert "total_live_transactions" in data
+
+    def test_two_way_mode_switching_contract(self, client):
+        """Verifies both 'mode' and 'active_mode' fields remain synchronized in both directions."""
+        # Initial status
+        init_status = client.get("/api/provider/status").json()
+        assert init_status["mode"] == "DEMO"
+        assert init_status["active_mode"] == "DEMO"
+
+        # Switch to LIVE
+        with patch.object(PROVIDER_MANAGER.live_provider, "fetch_latest_block_transactions", return_value=[]):
+            live_resp = client.post("/api/provider/mode", json={"mode": "LIVE"}).json()
+            assert live_resp["mode"] == "LIVE"
+            assert live_resp["active_mode"] == "LIVE"
+            assert live_resp["is_live_active"] is True
+
+            status_live = client.get("/api/provider/status").json()
+            assert status_live["mode"] == "LIVE"
+            assert status_live["active_mode"] == "LIVE"
+
+            # Switch back to DEMO
+            demo_resp = client.post("/api/provider/mode", json={"mode": "DEMO"}).json()
+            assert demo_resp["mode"] == "DEMO"
+            assert demo_resp["active_mode"] == "DEMO"
+            assert demo_resp["is_live_active"] is False
+
+            status_demo = client.get("/api/provider/status").json()
+            assert status_demo["mode"] == "DEMO"
+            assert status_demo["active_mode"] == "DEMO"
+
+    def test_pause_and_resume_monitoring_endpoints(self, client):
+        """Verifies End Live (pause) and Resume Live endpoints, ensuring manual polling does not silently resume."""
+        with patch.object(PROVIDER_MANAGER.live_provider, "fetch_latest_block_transactions", return_value=[]):
+            # 1. Switch to LIVE -> polling starts
+            client.post("/api/provider/mode", json={"mode": "LIVE"})
+            status1 = client.get("/api/provider/status").json()
+            assert status1["mode"] == "LIVE"
+            assert status1["is_polling"] is True
+            assert status1["monitoring_status"] == "ACTIVE"
+
+            # 2. Pause monitoring (End Live)
+            pause_resp = client.post("/api/provider/pause").json()
+            assert pause_resp["mode"] == "LIVE"
+            assert pause_resp["is_polling"] is False
+            assert pause_resp["monitoring_status"] == "PAUSED"
+
+            # Status endpoint reflects paused state
+            status2 = client.get("/api/provider/status").json()
+            assert status2["is_polling"] is False
+            assert status2["monitoring_status"] == "PAUSED"
+
+            # 3. Manual Poll Block must NOT silently resume automatic monitoring
+            poll_resp = client.post("/api/provider/fetch-live", json={"max_txs": 5}).json()
+            assert poll_resp["is_polling"] is False
+            status3 = client.get("/api/provider/status").json()
+            assert status3["is_polling"] is False
+
+            # 4. Resume monitoring
+            resume_resp = client.post("/api/provider/resume").json()
+            assert resume_resp["mode"] == "LIVE"
+            assert resume_resp["is_polling"] is True
+            assert resume_resp["monitoring_status"] == "ACTIVE"
+
+            # 5. Monitoring control endpoint (active=False)
+            ctrl_pause = client.post("/api/provider/monitoring", json={"active": False}).json()
+            assert ctrl_pause["is_polling"] is False
+
+            # 6. Monitoring control endpoint (active=True)
+            ctrl_resume = client.post("/api/provider/monitoring", json={"active": True}).json()
+            assert ctrl_resume["is_polling"] is True
+
+            # Clean up: switch back to DEMO
+            client.post("/api/provider/mode", json={"mode": "DEMO"})
+

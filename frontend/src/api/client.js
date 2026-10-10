@@ -314,5 +314,14 @@ export async function exportLiveTransactionsCsv() {
   }
 }
 
+export async function pauseLiveMonitoring() {
+  return request('/api/provider/pause', {
+    method: 'POST',
+  });
+}
 
-
+export async function resumeLiveMonitoring() {
+  return request('/api/provider/resume', {
+    method: 'POST',
+  });
+}
