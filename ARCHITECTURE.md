@@ -523,3 +523,109 @@ All transaction providers adhere to `BaseTransactionProvider`:
 - Manages an observer subscription pattern (`register_listener(callback)`).
 - When a mode change or dynamic ingestion occurs, the registered callback rebuilds the `DetectionEngine` and `IntelligenceEngine` cache in memory, ensuring immediate synchronization across all downstream endpoints (`/alerts`, `/wallets/*`, `/graph/*`, `/flow/*`, `/analytics/*`).
 
+---
+
+## Phase 11 — Live Ethereum Integration, SQLite Persistence & Sliding Window Architecture
+
+### 1. Dual-Tier Data Architecture: Persistent SQLite vs In-Memory Graph
+
+In production blockchain intelligence, raw transaction throughput is unbounded, whereas in-memory graph topologies (NetworkX directed graphs) must remain memory-efficient and performant for sub-second path reconstruction and cycle detection.
+
+Phase 11 introduces a decoupled dual-tier architecture:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Ethereum Mainnet JSON-RPC Node                       │
+│              (https://ethereum-rpc.publicnode.com)                     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ eth_getBlockByNumber (latest)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│         LiveBlockchainProvider (Daemon Poller Thread)                  │
+│  - Contract Creation Normalization (to=0x00...00, contract_creation)   │
+│  - Reorganization Detection (parentHash mismatch validation)           │
+│  - Wei-to-ETH Floating Point Conversion & Timestamp Parsing            │
+└──────────────────┬─────────────────────────────────┬───────────────────┘
+                   │                                 │
+                   ▼                                 ▼
+┌─────────────────────────────────────┐   ┌──────────────────────────────┐
+│ Tier 1: Persistent SQLite Database  │   │ Tier 2: In-Memory Window     │
+│   (backend/data/live_chain.db)      │   │   (NetworkX Detection Graph) │
+│ - live_transactions (Full Ledger)   │   │ - Bounded Sliding Window     │
+│ - processed_blocks (Reorg History)  │   │   (Max 10k txs / 2.0 hours)  │
+│ - sync_state (Checkpoint Height)    │   │ - Zero Memory Growth Leaks   │
+│ - Export to Excel-BOM CSV           │   │ - Pre-warmed on Startup      │
+└─────────────────────────────────────┘   └──────────────┬───────────────┘
+                                                         │
+                                                         ▼
+                                          ┌──────────────────────────────┐
+                                          │ Engine Hot-Reload Broadcast  │
+                                          │ - Re-indexes Graph & Alerts  │
+                                          │ - Instant UI Metric Updates  │
+                                          └──────────────────────────────┘
+```
+
+### 2. SQLite Storage Schema (`backend/providers/storage.py`)
+
+The persistent storage engine utilizes SQLite3 (`backend/data/live_chain.db`) with zero external binary dependencies:
+
+- **`live_transactions` Table**:
+  - `tx_hash` (TEXT PRIMARY KEY): Hexadecimal 32-byte transaction hash.
+  - `from_address` (TEXT NOT NULL) & `to_address` (TEXT NOT NULL): Standardized lowercase Ethereum addresses.
+  - `amount_eth` (REAL NOT NULL): Converted Ether amount.
+  - `timestamp` (TEXT NOT NULL): ISO 8601 UTC timestamp (`YYYY-MM-DDTHH:MM:SS+00:00`).
+  - `block_number` (INTEGER NOT NULL): Canonical Ethereum block height.
+  - `gas_fee` (REAL NOT NULL): Cumulative gas fee in ETH (`gas * gasPrice`).
+  - `status` (TEXT): Receipt execution status (`SUCCESS` / `FAILED`).
+  - `category_label` (TEXT): Classification tag (`live_transfer`, `contract_creation`).
+  - `description` (TEXT): Human-readable activity summary.
+  - **Indexes**: `idx_live_tx_timestamp`, `idx_live_tx_block`, `idx_live_tx_from`, `idx_live_tx_to`.
+
+- **`processed_blocks` Table**:
+  - `block_number` (INTEGER PRIMARY KEY)
+  - `block_hash` (TEXT UNIQUE NOT NULL)
+  - `parent_hash` (TEXT NOT NULL)
+  - `timestamp` (INTEGER NOT NULL)
+  - `tx_count` (INTEGER NOT NULL)
+  - `processed_at` (TEXT NOT NULL)
+
+- **`sync_state` Table**:
+  - Key-value metadata table recording `latest_processed_block` and `last_sync_timestamp` for instant checkpoint restoration on service restart.
+
+### 3. Concurrency Safety & Windows File-Locking Prevention
+
+To eliminate Windows `[WinError 32]` file handle locks (which occur when SQLite connections remain open across threads or during test directory cleanup), `LiveStorage` encapsulates database connections inside a strict Python generator context manager:
+
+```python
+@contextmanager
+def _get_connection(self):
+    conn = sqlite3.connect(self._db_path, timeout=15.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+```
+
+This guarantees that SQLite handles are immediately released upon statement completion, even under abnormal process termination or exceptions.
+
+### 4. Background Polling Daemon Lifecycle
+
+- When `ProviderManager.switch_mode("LIVE")` is invoked, it instantiates and starts `ChainSentinel-LivePollWorker` as a daemon background thread (`threading.Thread(daemon=True)`).
+- The thread continuously polls the next block every 8 seconds (`CHAINSENTINEL_POLL_INTERVAL`), catching network disconnects gracefully with exponential backoff and error tracking (`_consecutive_errors`).
+- When switching back to `DEMO`, `ProviderManager.switch_mode("DEMO")` sets a thread-safe stop event (`_stop_event.set()`), joins the worker thread cleanly, and restores the synthetic dataset.
+
+### 5. Blockchain Reorganization Detection
+
+When processing block $N$, the provider queries the previous block record $N-1$ from SQLite:
+- If `incoming_block.parentHash != previous_block.block_hash`, a chain reorganization is detected.
+- The provider logs a warning, flags the metadata status, updates `sync_state`, and records `last_reorg_info` for investigator visibility.
+
+### 6. Excel-Compatible CSV Exporter
+
+The `LiveStorage.export_to_csv()` engine streams ingested transactions directly into standard CSV format with a UTF-8 Byte Order Mark (`\ufeff`) prepended to the stream:
+- Prevents character corruption in Microsoft Excel on Windows.
+- Exposes standard forensic columns (`tx_hash`, `from_address`, `to_address`, `amount_eth`, `timestamp`, `block_number`, `gas_fee`, `status`, `category_label`, `description`).
+- Available via `GET /api/provider/export-csv` with browser download attachment headers.
+
+

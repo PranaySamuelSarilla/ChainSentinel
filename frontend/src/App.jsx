@@ -10,7 +10,8 @@ import {
   Compass,
   Database,
   Radio,
-  DownloadCloud
+  DownloadCloud,
+  FileDown
 } from 'lucide-react';
 import {
   getHealth,
@@ -21,7 +22,8 @@ import {
   createInvestigation,
   getProviderStatus,
   setProviderMode,
-  fetchLiveBlock
+  fetchLiveBlock,
+  exportLiveTransactionsCsv
 } from './api';
 
 import DashboardView from './components/DashboardView';
@@ -69,6 +71,7 @@ export default function App() {
   const [providerInfo, setProviderInfo] = useState(null);
   const [switchingMode, setSwitchingMode] = useState(false);
   const [pollingBlock, setPollingBlock] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [modeNotification, setModeNotification] = useState(null);
 
   // Loading & Error States
@@ -112,6 +115,41 @@ export default function App() {
     loadInitialData();
   }, [loadInitialData]);
 
+  // Live Mode Periodic Telemetry Polling (Every 6 seconds when LIVE)
+  useEffect(() => {
+    if (dataMode !== 'LIVE') return;
+    let isMounted = true;
+
+    const pollTimer = setInterval(async () => {
+      try {
+        const status = await getProviderStatus();
+        if (!isMounted) return;
+        setProviderInfo(status);
+
+        // If transaction count changed, reload analytics and alerts
+        if (status.active_transaction_count !== summary?.total_transactions) {
+          const [sumRes, infoRes, alertsRes] = await Promise.all([
+            getDetectionSummary(),
+            getDatasetInfo().catch(() => null),
+            getAlerts({ limit: 100 }),
+          ]);
+          if (isMounted) {
+            setSummary(sumRes);
+            setDatasetInfo(infoRes);
+            setAlerts(alertsRes.alerts || []);
+          }
+        }
+      } catch (pollErr) {
+        console.warn('Live telemetry poll error:', pollErr);
+      }
+    }, 6000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollTimer);
+    };
+  }, [dataMode, summary?.total_transactions]);
+
   // Mode Switching Handler
   const handleToggleMode = async (targetMode) => {
     if (switchingMode || targetMode === dataMode) return;
@@ -120,7 +158,11 @@ export default function App() {
       const res = await setProviderMode(targetMode);
       setDataMode(res.mode);
       setProviderInfo(res);
-      setModeNotification(`Switched to ${res.mode} mode (${res.transaction_count} transactions active)`);
+      setModeNotification(
+        targetMode === 'LIVE'
+          ? `Switched to LIVE mode • Polling Ethereum Mainnet`
+          : `Switched to DEMO mode • Benchmark Dataset Active (${res.active_transaction_count ?? 70} txs)`
+      );
       setTimeout(() => setModeNotification(null), 4000);
       await loadInitialData();
     } catch (err) {
@@ -138,7 +180,9 @@ export default function App() {
     setPollingBlock(true);
     try {
       const res = await fetchLiveBlock(15);
-      setModeNotification(`Polled block ${res.block_number || 'latest'}: ${res.ingested_count} txs ingested (${res.total_transactions} total)`);
+      const blk = res.latest_block_number || 'latest';
+      const ingested = res.fetched_count ?? res.ingested_count ?? 0;
+      setModeNotification(`Polled block #${blk}: ${ingested} txs ingested (${res.total_persisted_transactions ?? res.total_live_transactions ?? 0} total)`);
       setTimeout(() => setModeNotification(null), 5000);
       await loadInitialData();
     } catch (err) {
@@ -147,6 +191,23 @@ export default function App() {
       setTimeout(() => setModeNotification(null), 4000);
     } finally {
       setPollingBlock(false);
+    }
+  };
+
+  // Export CSV Handler
+  const handleExportCsv = async () => {
+    if (exportingCsv) return;
+    setExportingCsv(true);
+    try {
+      await exportLiveTransactionsCsv();
+      setModeNotification('Exported live transactions to CSV file');
+      setTimeout(() => setModeNotification(null), 4000);
+    } catch (err) {
+      console.error('Failed to export CSV:', err);
+      setModeNotification('Failed to export live transactions CSV');
+      setTimeout(() => setModeNotification(null), 4000);
+    } finally {
+      setExportingCsv(false);
     }
   };
 
@@ -316,20 +377,48 @@ export default function App() {
             </div>
 
             {dataMode === 'LIVE' && (
-              <button
-                type="button"
-                onClick={handlePollLiveBlock}
-                disabled={pollingBlock}
-                title="Poll Latest Ethereum Block (Cloudflare RPC)"
-                className="px-2 py-1 bg-slate-850 hover:bg-slate-750 text-cyan-300 rounded-md text-[10px] flex items-center gap-1 transition-colors border border-cyan-800/40 disabled:opacity-50"
-              >
-                <DownloadCloud className={`w-3 h-3 ${pollingBlock ? 'animate-bounce' : ''}`} />
-                <span className="hidden sm:inline">Poll Block</span>
-              </button>
+              <>
+                {providerInfo?.latest_block_number && (
+                  <span className="px-2 py-0.5 bg-slate-900 border border-slate-700/80 rounded text-[10px] text-cyan-300 font-bold hidden md:inline" title="Latest processed Ethereum block">
+                    #{providerInfo.latest_block_number}
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handlePollLiveBlock}
+                  disabled={pollingBlock}
+                  title="Poll Latest Ethereum Block (Cloudflare RPC)"
+                  className="px-2 py-1 bg-slate-850 hover:bg-slate-750 text-cyan-300 rounded-md text-[10px] flex items-center gap-1 transition-colors border border-cyan-800/40 disabled:opacity-50"
+                >
+                  <DownloadCloud className={`w-3 h-3 ${pollingBlock ? 'animate-bounce' : ''}`} />
+                  <span className="hidden sm:inline">Poll Block</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  disabled={exportingCsv}
+                  title="Export all collected live transactions to Excel-compatible CSV"
+                  className="px-2 py-1 bg-slate-850 hover:bg-slate-750 text-indigo-300 rounded-md text-[10px] flex items-center gap-1 transition-colors border border-indigo-800/40 disabled:opacity-50"
+                >
+                  <FileDown className="w-3 h-3" />
+                  <span className="hidden sm:inline">Export CSV</span>
+                </button>
+
+                {providerInfo?.last_error && (
+                  <span
+                    className="text-[10px] text-amber-400 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.5 rounded cursor-help max-w-[130px] truncate hidden lg:inline"
+                    title={`RPC Status: ${providerInfo.last_error}`}
+                  >
+                    ⚠ RPC Warning
+                  </span>
+                )}
+              </>
             )}
 
-            <span className="text-[10px] text-slate-500 px-1 hidden sm:inline" title="Loaded transaction count">
-              {providerInfo?.transaction_count ?? (datasetInfo?.total_transactions ?? '—')} txs
+            <span className="text-[10px] text-slate-400 px-1 hidden sm:inline" title="Loaded active transactions in analysis window">
+              {providerInfo?.active_window_transactions ?? (datasetInfo?.total_transactions ?? '—')} txs
             </span>
           </div>
 
@@ -461,6 +550,7 @@ export default function App() {
             {/* VIEW 1: DASHBOARD (Phase 4C) */}
             {activeTab === 'dashboard' && (
               <DashboardView
+                dataMode={dataMode}
                 summary={summary}
                 datasetInfo={datasetInfo}
                 alerts={alerts}

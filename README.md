@@ -41,9 +41,10 @@ ChainSentinel/
 │   │   └── __init__.py
 │   ├── analytics/                # Behavioral profiling & intelligence (Phase 8)
 │   │   └── __init__.py
-│   ├── tests/                    # Automated pytest suite (183 tests)
+│   ├── tests/                    # Automated pytest suite (199 tests)
 │   │   ├── test_basic.py         # Tests for dataset and API endpoints
-│   │   └── test_providers.py     # Tests for providers and live ingestion
+│   │   ├── test_providers.py     # Tests for providers and mode switching
+│   │   └── test_live_integration.py # Tests for SQLite persistence & live RPC
 │   ├── main.py                   # FastAPI application & REST endpoints
 │   ├── requirements.txt          # Python dependencies
 │   └── venv/                     # Python virtual environment
@@ -141,7 +142,16 @@ Run the backend test suite:
 .\backend\venv\Scripts\python.exe -m pytest backend/tests -v
 ```
 
-All 183 automated tests verify:
+### 3. Running Automated Tests
+
+Run the comprehensive backend test suite:
+
+```bash
+# From ChainSentinel root directory:
+.\backend\venv\Scripts\python.exe -m pytest backend/tests -v
+```
+
+All 199 automated tests verify:
 - Health check, platform statistics, and transaction provider endpoints
 - Synthetic dataset topological integrity
 - Six modular graph detection algorithms (Circular, Rapid, Burst, Split, Recomb, Cluster)
@@ -151,15 +161,50 @@ All 183 automated tests verify:
 - Multi-hop directed flow tracer and path reconstruction
 - Behavioral wallet profiling, 9 explainable classifications, and cross-pattern alert correlation
 - Pluggable provider abstraction, live transaction normalization, and public RPC polling
+- SQLite relational persistence, schema indexing, and deduplication
+- Contract creation normalization (`to = null` -> `0x00...00`)
+- Blockchain reorganization detection (`parentHash` mismatch)
+- In-memory sliding-window pruning (capacity & time window)
+- Checkpoint restoration from SQLite upon server restarts
+- Excel-compatible CSV stream generation with UTF-8 BOM
 
 ---
 
-## ⚡ Pluggable Transaction Providers & Live Ingestion (Phase 10)
+## ⚡ Live Ethereum Integration & SQLite Persistence (Phase 11)
 
-ChainSentinel supports two data ingestion modes, switchable on-the-fly via the navbar toggle or REST API:
+ChainSentinel features a production-ready live Ethereum ingestion engine while maintaining 100% deterministic offline demo capability:
 
-1. **`DEMO` Mode (Default)**: Loads the deterministic 70-transaction benchmark dataset (`backend/data/transactions.csv`). Guarantees 100% offline uptime, reproducible alerts, and zero network dependency.
-2. **`LIVE` Mode**: Enables dynamic Ethereum transaction ingestion and block polling. Connects to Ethereum public RPC (default: `https://cloudflare-eth.com`, or custom endpoint via `CHAINSENTINEL_RPC_URL` environment variable). Ingested blocks are normalized, and the detection and intelligence engines dynamically re-warm and re-index in memory.
+1. **`DEMO` Mode (Default)**: Loads the deterministic 70-transaction benchmark dataset (`backend/data/transactions.csv`). Guarantees 100% offline uptime, reproducible alerts (21 alerts across 6 topologies), and zero network dependency.
+2. **`LIVE` Mode**: Connects to the Ethereum blockchain via JSON-RPC:
+   - **Zero-Config Public RPC**: Defaults to `https://ethereum-rpc.publicnode.com`. Override via environment variable `CHAINSENTINEL_RPC_URL` (e.g., Alchemy, Infura, or custom node).
+   - **Autonomous Background Polling**: A dedicated background daemon thread (`ChainSentinel-LivePollWorker`) polls the canonical chain every 8 seconds (`CHAINSENTINEL_POLL_INTERVAL`).
+   - **Persistent SQLite Storage**: Ingests all historical transactions into `backend/data/live_chain.db`. Persists across server restarts.
+   - **Dual-Tier Sliding Window**: Retains a bounded window (default: last 2 hours or 10,000 transactions) in memory for sub-second NetworkX graph analysis and AML pattern matching without memory bloat.
+   - **Reorganization Detection**: Automatically flags chain reorganizations when incoming `parentHash` mismatches previous recorded block height.
+   - **Excel-Compatible CSV Export**: Click "Export CSV" in the navigation bar (or call `GET /api/provider/export-csv`) to download an audit-ready ledger with UTF-8 BOM encoding.
+   - **Manual Poll Trigger**: Click "Poll Block" in the navigation bar to immediately ingest the latest Ethereum block on demand.
+
+---
+
+## 💻 Beginner-Friendly Windows PowerShell Run Guide
+
+### Terminal 1 — Start the Backend
+```powershell
+cd "c:\Users\C-SQUARE\Desktop\Hackathons\TechHorizen 2.0\ChainSentinel\backend"
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
+```
+
+### Terminal 2 — Start the Frontend
+```powershell
+cd "c:\Users\C-SQUARE\Desktop\Hackathons\TechHorizen 2.0\ChainSentinel\frontend"
+npm run dev
+```
+
+### Open in Browser
+Visit **`http://localhost:5173`** in your browser.
+
+### Stop Servers
+In each PowerShell terminal, press **`Ctrl + C`** and type `Y` if prompted.
 
 ---
 
@@ -175,3 +220,5 @@ ChainSentinel supports two data ingestion modes, switchable on-the-fly via the n
 - [x] **Phase 8**: Advanced Analytics & Intelligence (Behavioral profiling, 9 explainable classifications, multi-pattern alert correlation, executive strategic dossiers, 5 REST endpoints, frontend intelligence visualizations)
 - [x] **Phase 9**: Final Integration, Interactive UI Polish & Hackathon Demo Readiness (Dark cinematic cyber command center aesthetics, forensic workflow pipeline stepper, smooth Cytoscape animations & halo glows, glassmorphism cards, cross-view seamless navigation)
 - [x] **Phase 10**: Production Hardening & Real-Time Ingestion Readiness (Pluggable provider layer, Ethereum JSON-RPC polling, dynamic transaction ingestion, navbar mode switcher, 183 tests passing)
+- [x] **Phase 11**: Complete Live Ethereum Integration & SQLite Persistence (Autonomous daemon polling, SQLite storage, reorg detection, contract normalization, sliding window, CSV export, 199 tests passing)
+

@@ -89,13 +89,16 @@ npm run dev
 
 ## Current Status & Next Steps
 
-**Phase 10 is COMPLETE:**
-- Backend: 183/183 tests passing.
+**Phase 11 is COMPLETE:**
+- Backend: 199/199 tests passing.
 - Frontend: 0 lint errors, clean production build.
-- Pluggable transaction providers active: `SyntheticTransactionProvider` (default demo benchmark) and `LiveBlockchainProvider` (Ethereum JSON-RPC).
-- UI data source switcher integrated in navbar with instant block polling capability.
-- Full product branding cleanup applied ("ChainSentinel", "Blockchain Forensic Intelligence", "Investigation Command Center").
+- Live Ethereum JSON-RPC integration operational with resilient public RPC (`https://ethereum-rpc.publicnode.com`) and custom `CHAINSENTINEL_RPC_URL` support.
+- Persistent SQLite storage (`backend/data/live_chain.db`) with tables for transactions, processed blocks, and sync state checkpoints.
+- Autonomous background polling worker thread with clean start/stop lifecycle.
+- Contract creation normalization, reorg detection, memory-bounded sliding window (2hr / 10k txs), and Excel-compatible UTF-8 BOM CSV export.
+- UI: Real-time telemetry, live block height badge, on-demand block polling, CSV export, and active monitoring status.
+- DEMO mode 100% preserved as the deterministic baseline for reproducible forensics.
 
 **Next Step:**
-- Project is complete, hardened, and ready for production deployment or live hackathon presentation.
+- Application is fully complete, hardened, and ready for production deployment, live on-chain demonstrations, or hackathon presentation.
 

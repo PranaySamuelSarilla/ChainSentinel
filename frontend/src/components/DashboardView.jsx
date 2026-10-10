@@ -46,6 +46,7 @@ const CLASSIFICATION_COLORS = {
 };
 
 export default function DashboardView({
+  dataMode = 'DEMO',
   summary,
   datasetInfo,
   alerts,
@@ -126,6 +127,28 @@ export default function DashboardView({
           )}
         </div>
       </div>
+
+      {/* Live Mode Telemetry Banner */}
+      {dataMode === 'LIVE' && (
+        <div className="bg-slate-900/80 border border-emerald-500/30 rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono shadow-md glow-emerald">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <div>
+              <span className="text-emerald-300 font-bold uppercase tracking-wider">Live Ethereum Mainnet Stream Active</span>
+              <span className="text-slate-400 ml-2 hidden sm:inline">
+                {alerts.length === 0
+                  ? 'Recent on-chain blocks ingested. Current activity is normal/benign (0 AML anomalies detected).'
+                  : `${alerts.length} on-chain suspicious topology patterns detected across live blocks.`}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-slate-400 shrink-0">
+            <span>Buffer: <strong className="text-indigo-300">{datasetInfo?.total_transactions ?? 0}</strong> txs</span>
+            <span className="text-slate-700">&bull;</span>
+            <span>Sliding Window: <strong className="text-cyan-300">2h</strong></span>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

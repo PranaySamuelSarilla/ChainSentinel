@@ -16,30 +16,50 @@
 - **Phase 8 — Advanced Analytics & Intelligence**: COMPLETE
 - **Phase 9 — Final Integration, Interactive UI Polish & Hackathon Demo Readiness**: COMPLETE
 - **Phase 10 — Production Hardening & Real-Time Transaction Readiness**: COMPLETE
+- **Phase 11 — Complete Live Ethereum Integration & SQLite Persistence**: COMPLETE
 
-**Current Status**: **Phase 10 Complete — Production Hardened & Real-Time Ingestion Ready**
+**Current Status**: **Phase 11 Complete — Complete Live Ethereum Integration & SQLite Persistence**
 
 ---
 
 ## Completed Features
 
+- **Live Ethereum Blockchain Integration & SQLite Persistence (Phase 11)**:
+  - `LiveStorage` SQLite Persistence Engine (`backend/providers/storage.py`):
+    - Dedicated SQLite relational database (`backend/data/live_chain.db`) with schemas for `live_transactions`, `processed_blocks`, and `sync_state`.
+    - Fully indexed for high-throughput queries (`idx_live_tx_timestamp`, `idx_live_tx_block`, `idx_live_tx_from`, `idx_live_tx_to`, `idx_processed_blocks_num`).
+    - Thread-safe connection context manager guaranteeing explicit connection closure (`conn.close()` in `finally`), eliminating Windows file-locking regressions.
+    - Transaction deduplication via `INSERT OR IGNORE` on primary key `tx_hash`.
+    - Sliding-window querying preserving insertion order (`WHERE rowid IN (...) ORDER BY rowid ASC`).
+    - Excel-compatible CSV exporter with UTF-8 BOM (`\ufeff`) to prevent character encoding issues in spreadsheet software.
+  - `LiveBlockchainProvider` Autonomous Ingestion (`backend/providers/live.py`):
+    - Background polling worker running on a daemon thread (`ChainSentinel-LivePollWorker`) polling every 8 seconds (configurable via `CHAINSENTINEL_POLL_INTERVAL`).
+    - Auto-recovery and checkpoint restoration: resumes from highest processed block number on restart.
+    - Blockchain reorganization detection comparing incoming `parentHash` with previous stored `block_hash`.
+    - Contract creation normalization: captures deployment transactions where `to` is `null`/empty, mapping them to `0x0000000000000000000000000000000000000000` with category label `contract_creation`.
+    - High-precision Wei-to-ETH conversion, gas calculation, and standardized ISO 8601 UTC timestamps.
+    - Dual-tier data model: full transaction history persisted in SQLite, while NetworkX in-memory analysis graph is constrained to an active sliding window (default 2 hours, 10,000 transactions) to prevent memory leaks.
+    - Resilient public RPC default (`https://ethereum-rpc.publicnode.com`) with custom override via `CHAINSENTINEL_RPC_URL`.
+    - Graceful error tracking (`_last_error`, `_consecutive_errors`, backoff retry).
+  - `ProviderManager` Lifecycle & Event Coordination (`backend/providers/manager.py`):
+    - Background thread lifecycle management: automatically starts daemon polling on `LIVE` mode and stops it on `DEMO` mode.
+    - Real-time listener callback hook notifying `DetectionEngine` to re-index and re-score without restarting the FastAPI server.
+    - Zero deceptive fallbacks: returns true on-chain transactions in `LIVE` mode and the 70 synthetic benchmark transactions in `DEMO` mode.
+  - New REST API Endpoints:
+    - `GET /api/provider/export-csv`: Streams live ingested transactions as an Excel-compatible CSV file with `Content-Disposition: attachment`.
+    - `GET /api/provider/check-connection`: Probes the configured JSON-RPC node and reports availability, current block height, and response latency.
+  - Frontend Enhancements:
+    - 6-second periodic telemetry polling when `LIVE` mode is active.
+    - Real-time block height pill (`#<block_number>`) with pulse indicator in the navigation bar.
+    - "Poll Block" manual trigger button and "Export CSV" one-click ledger download.
+    - Live monitoring status banner on Dashboard explaining active on-chain surveillance and normal AML behavior when 0 alerts are detected.
+  - Test Suite: **199 / 199 automated tests passing** (16 new tests in `test_live_integration.py` covering SQLite persistence, contract normalization, reorg detection, deduplication, restart recovery, sliding window, CSV export, and engine integration). Frontend lint: 0 errors; frontend build: clean.
+
 - **Pluggable Transaction Provider Architecture & Real-Time Ingestion (Phase 10)**:
   - `BaseTransactionProvider` (`backend/providers/base.py`): Abstract base contract defining dataset querying, transaction ingestion, and live block fetching.
   - `SyntheticTransactionProvider` (`backend/providers/synthetic.py`): Default, zero-dependency benchmark provider loading the 70 curated forensic transactions (1,200.45 ETH) for 100% reliable deterministic offline demos and automated test runs.
-  - `LiveBlockchainProvider` (`backend/providers/live.py`): Ingestion provider supporting Ethereum JSON-RPC block querying (Cloudflare unauthenticated public RPC fallback, configurable via `CHAINSENTINEL_RPC_URL`), batch JSON ingestion, and robust data normalization into typed transaction records.
-  - `ProviderManager` (`backend/providers/manager.py`): Central controller orchestrating mode switching (`DEMO` vs `LIVE`) and listener registration. When the provider mode or dataset changes, listener callbacks automatically re-warm and synchronize `DetectionEngine` and `IntelligenceEngine` in memory without server restarts.
-  - New REST API Endpoints:
-    - `GET /api/provider/status`: Retrieve active mode (`DEMO` / `LIVE`), provider name, and loaded transaction count.
-    - `POST /api/provider/mode`: Hot-swap active mode between `DEMO` and `LIVE`.
-    - `POST /api/provider/ingest`: Dynamically ingest arbitrary live or simulated transaction batches.
-    - `POST /api/provider/fetch-live`: Query latest block transactions from public Ethereum RPC into active memory.
-    - `GET /health`: Enhanced to return `data_mode` and `provider_name`.
-  - Frontend UI Data Source Switcher (`frontend/src/App.jsx`):
-    - Navbar segmented toggle: DEMO (indigo) vs LIVE (emerald with animated beacon).
-    - Dynamic "Poll Block" action button triggering on-demand RPC block ingestion in LIVE mode.
-    - Active transaction count pill and temporary feedback toast notifications.
+  - `ProviderManager` (`backend/providers/manager.py`): Central controller orchestrating mode switching (`DEMO` vs `LIVE`) and listener registration.
   - Finished Product Branding Cleanup: Removed development-phase branding ("Phase 9", "Hackathon Demo Ready") in favor of production styling ("ChainSentinel", "Blockchain Forensic Intelligence", "Investigation Command Center").
-  - Test Suite: **183 / 183 automated tests passing** (14 new unit and integration tests in `backend/tests/test_providers.py`). Frontend lint: 0 errors; frontend build: clean.
 
 - **React + Vite Frontend (`frontend/`)**: React 19, Vite 8, Tailwind CSS v4, Lucide React icons, Cytoscape.js installed. Development server with backend API proxy (`/api` → `http://127.0.0.1:8000`) and direct fallback. Full frontend API client layer (`frontend/src/api/`) communicating with all backend endpoints. Complete forensic investigation platform across 4 coordinated views:
   - **Dashboard View (`DashboardView.jsx`)**: Cybersecurity command center with live KPI metric strip (21 alerts, 11 high/critical, 9 medium, 1 low), interactive pattern breakdown matrix (6 cards with click-to-filter), top threats feed, and quick forensic jumps.

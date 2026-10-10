@@ -4,6 +4,7 @@ Verifies synthetic provider, live blockchain provider, normalization contracts,
 manager mode switching, real-time ingestion, and REST endpoints.
 """
 
+from unittest.mock import patch
 import pytest
 from starlette.testclient import TestClient
 
@@ -24,9 +25,11 @@ def client():
 
 @pytest.fixture(autouse=True)
 def ensure_demo_mode_after_test():
-    """Ensure every test leaves the system in DEMO mode."""
+    """Ensure every test runs and leaves the system in clean DEMO mode."""
+    PROVIDER_MANAGER.live_provider.clear_live_transactions()
     yield
     PROVIDER_MANAGER.switch_mode("DEMO")
+    PROVIDER_MANAGER.live_provider.clear_live_transactions()
 
 
 class TestSyntheticProvider:
@@ -72,6 +75,7 @@ class TestLiveBlockchainProvider:
 
     def test_live_provider_basic_contract(self):
         prov = LiveBlockchainProvider()
+        prov.clear_live_transactions()
         assert prov.mode == "LIVE"
         assert prov.get_transactions() == []
         status = prov.get_status()
@@ -100,6 +104,7 @@ class TestLiveBlockchainProvider:
 
     def test_ingest_and_deduplicate(self):
         prov = LiveBlockchainProvider()
+        prov.clear_live_transactions()
         tx1 = {
             "tx_id": "0xLIVE_1",
             "from_wallet": "0xSENDER1",
@@ -162,10 +167,11 @@ class TestProviderManager:
             called.append(True)
 
         mgr.register_listener(callback)
-        mgr.switch_mode("LIVE")
-        assert len(called) == 1
-        mgr.switch_mode("DEMO")
-        assert len(called) == 2
+        with patch.object(mgr.live_provider, "fetch_latest_block_transactions", return_value=[]):
+            mgr.switch_mode("LIVE")
+            assert len(called) == 1
+            mgr.switch_mode("DEMO")
+            assert len(called) == 2
 
 
 class TestProviderEndpoints:

@@ -1,7 +1,8 @@
 """
 ChainSentinel - Transaction Provider Manager
-Coordinates synthetic demo data and real-time blockchain ingestion.
-Provides hot-switching and engine update notification callbacks.
+Phase 11 - Coordinates synthetic demo data and real-time blockchain ingestion.
+Provides hot-switching, background worker lifecycle management, and engine
+update notification callbacks.
 """
 
 import os
@@ -29,6 +30,18 @@ class ProviderManager:
         self._synthetic = SyntheticTransactionProvider()
         self._live = LiveBlockchainProvider()
         self._update_listeners: List[Callable[[], None]] = []
+
+        # Connect live provider's new data callback to notify listeners
+        self._live.set_on_new_data_callback(self._on_live_data_updated)
+
+        # If starting in LIVE mode, start the polling thread
+        if self._mode == self.MODE_LIVE:
+            self._live.start_polling()
+
+    def _on_live_data_updated(self) -> None:
+        """Invoked when newly ingested live transactions update the in-memory window."""
+        if self._mode == self.MODE_LIVE:
+            self._notify_listeners()
 
     @property
     def mode(self) -> str:
@@ -61,21 +74,25 @@ class ProviderManager:
         return self._synthetic
 
     def get_transactions(self) -> List[Dict[str, Any]]:
-        """Returns transactions from the active provider."""
-        txs = self.get_active_provider().get_transactions()
-        # Fallback safeguard: if LIVE mode has 0 transactions yet, return synthetic to avoid empty crash
-        if self._mode == self.MODE_LIVE and not txs:
-            return self._synthetic.get_transactions()
-        return txs
+        """Returns transactions from the active provider without deceptive fallbacks."""
+        if self._mode == self.MODE_LIVE:
+            return self._live.get_transactions()
+        return self._synthetic.get_transactions()
 
     def switch_mode(self, new_mode: str) -> Dict[str, Any]:
-        """Switches the active provider between DEMO and LIVE."""
+        """Switches the active provider between DEMO and LIVE, managing worker threads cleanly."""
         target = new_mode.upper().strip()
         if target not in (self.MODE_DEMO, self.MODE_LIVE):
             raise ValueError(f"Invalid mode '{new_mode}'. Expected 'DEMO' or 'LIVE'.")
 
         if self._mode != target:
-            self._mode = target
+            if target == self.MODE_LIVE:
+                self._mode = self.MODE_LIVE
+                self._live.start_polling()
+            else:
+                self._live.stop_polling()
+                self._mode = self.MODE_DEMO
+
             self._notify_listeners()
 
         return self.get_status()
@@ -83,38 +100,53 @@ class ProviderManager:
     def ingest_live_transactions(self, raw_txs: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Ingests raw transactions into the live provider and refreshes analytical models."""
         added = self._live.ingest_batch(raw_txs)
-        if self._mode == self.MODE_LIVE and added:
-            self._notify_listeners()
-
+        live_count = len(self._live.get_transactions())
         return {
             "ingested_count": len(added),
-            "total_live_transactions": len(self._live.get_transactions()),
+            "total_live_transactions": live_count,
+            "active_window_transactions": live_count,
+            "total_persisted_transactions": self._live.get_status()["total_transactions"],
             "active_mode": self._mode,
         }
 
     def fetch_live_block(self, max_txs: int = 25) -> Dict[str, Any]:
         """Polls public RPC for latest block and normalizes transactions into the live feed."""
         added = self._live.fetch_latest_block_transactions(max_txs=max_txs)
-        if self._mode == self.MODE_LIVE and added:
-            self._notify_listeners()
-
+        status = self._live.get_status()
+        live_count = len(self._live.get_transactions())
         return {
             "fetched_count": len(added),
-            "total_live_transactions": len(self._live.get_transactions()),
-            "last_error": self._live.get_status().get("last_error"),
+            "total_live_transactions": live_count,
+            "active_window_transactions": live_count,
+            "total_persisted_transactions": status["total_transactions"],
+            "latest_block_number": status.get("latest_block_number"),
+            "last_error": status.get("last_error"),
             "active_mode": self._mode,
         }
+
+    def export_live_csv(self, filepath: Optional[str] = None) -> str:
+        """Exports all persisted live transactions to an Excel-friendly CSV string or file."""
+        return self._live.export_csv(filepath)
+
+    def shutdown(self) -> None:
+        """Gracefully shuts down background polling workers."""
+        self._live.stop_polling()
 
     def get_status(self) -> Dict[str, Any]:
         """Returns comprehensive status of both providers and active mode configuration."""
         active_provider = self.get_active_provider()
+        live_status = self._live.get_status()
+        synthetic_status = self._synthetic.get_status()
+
         return {
             "active_mode": self._mode,
             "is_live_active": self._mode == self.MODE_LIVE,
             "active_provider_name": active_provider.name,
-            "synthetic_status": self._synthetic.get_status(),
-            "live_status": self._live.get_status(),
+            "synthetic_status": synthetic_status,
+            "live_status": live_status,
             "active_transaction_count": len(self.get_transactions()),
+            "latest_block_number": live_status.get("latest_block_number"),
+            "is_polling": live_status.get("is_polling", False),
             "live_supported": True,
         }
 

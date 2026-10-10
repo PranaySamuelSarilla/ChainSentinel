@@ -288,4 +288,31 @@ export async function fetchLiveBlock(max_txs = 25) {
   });
 }
 
+export async function checkRpcConnection() {
+  return request('/api/provider/check-connection');
+}
+
+export async function exportLiveTransactionsCsv() {
+  try {
+    const res = await fetch('/api/provider/export-csv');
+    if (!res.ok) {
+      throw new Error(`Export failed: ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'chainsentinel_live_transactions.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    return { success: true };
+  } catch (err) {
+    console.error('Failed to export CSV:', err);
+    throw err;
+  }
+}
+
+
 

@@ -55,9 +55,10 @@ Endpoints:
     GET  /analytics/investigations/{case_id}
 """
 
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -96,10 +97,18 @@ except (ImportError, ModuleNotFoundError):
     from analytics.intelligence import IntelligenceEngine
     from providers.manager import PROVIDER_MANAGER
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    PROVIDER_MANAGER.shutdown()
+
+
 app = FastAPI(
     title="ChainSentinel API",
     description="Forensic investigation and graph analytics API for blockchain transactions",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 # Enable CORS for local Vite development and cross-origin access
@@ -984,6 +993,34 @@ def fetch_live_blockchain_block(req: Optional[FetchLiveBlockRequest] = None):
     """
     max_txs = req.max_txs if req and req.max_txs else 25
     return PROVIDER_MANAGER.fetch_live_block(max_txs=max_txs)
+
+
+@app.get("/api/provider/check-connection")
+def check_rpc_connection():
+    """
+    Probes the active Ethereum JSON-RPC provider to test network connectivity
+    and return current block height.
+    """
+    return PROVIDER_MANAGER.live_provider.check_connection()
+
+
+@app.get("/api/provider/export-csv")
+def export_live_transactions_csv():
+    """
+    Exports all persisted live Ethereum blockchain transactions from SQLite
+    to an Excel-compatible CSV file with UTF-8 BOM encoding.
+    """
+    csv_content = PROVIDER_MANAGER.export_live_csv()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="chainsentinel_live_transactions.csv"',
+            "Content-Type": "text/csv; charset=utf-8",
+        },
+    )
+
+
 
 
 
